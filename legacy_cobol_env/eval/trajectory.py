@@ -18,7 +18,7 @@ def call_tool(env: LegacyCobolEnvironment, tool_name: str, **arguments: Any) -> 
 def run_solution_trajectory(
     policy_name: str,
     task: TaskInstance,
-    code: str,
+    files: dict[str, str],
 ) -> dict[str, Any]:
     env = LegacyCobolEnvironment()
     reset_observation = env.reset(task_id=task.task_id)
@@ -28,8 +28,8 @@ def run_solution_trajectory(
     def record(tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         result, reward, done = call_tool(env, tool_name, **arguments)
         saved_arguments = dict(arguments)
-        if "code" in saved_arguments:
-            saved_arguments["code_chars"] = len(saved_arguments.pop("code"))
+        if "content" in saved_arguments:
+            saved_arguments["content_chars"] = len(saved_arguments.pop("content"))
         steps.append(
             {
                 "tool_name": tool_name,
@@ -47,9 +47,12 @@ def run_solution_trajectory(
         record("read_copybook", {"filename": filename})
         record("parse_copybook_layout", {"filename": filename})
     record("inspect_business_rules", {})
-    written = record("write_python_solution", {"code": code})
-    visible = record("run_visible_tests", {"draft_id": written["draft_id"]})
-    final = record("submit_final", {"draft_id": written["draft_id"]})
+    record("get_source_to_java_metadata", {})
+    record("generate_java_skeleton", {})
+    for path, content in files.items():
+        record("edit_java_file", {"path": path, "content": content})
+    visible = record("run_junit_tests", {})
+    final = record("submit_final", {})
 
     return {
         "policy": policy_name,
@@ -73,4 +76,3 @@ def run_solution_trajectory(
         },
         "steps": steps,
     }
-

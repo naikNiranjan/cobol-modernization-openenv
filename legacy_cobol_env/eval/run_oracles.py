@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from statistics import mean
 
-from legacy_cobol_env.eval.oracle_solutions import solution_for_task
+from legacy_cobol_env.eval.oracle_solutions import java_files_for_task
 from legacy_cobol_env.eval.trajectory import run_solution_trajectory
 from legacy_cobol_env.server.task_bank import all_tasks
 
@@ -20,7 +20,7 @@ def run_oracle_evaluation() -> dict:
         run_solution_trajectory(
             policy_name="oracle",
             task=task,
-            code=solution_for_task(task),
+            files=java_files_for_task(task),
         )
         for task in all_tasks()
     ]
@@ -43,4 +43,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

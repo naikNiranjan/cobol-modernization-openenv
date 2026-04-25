@@ -23,6 +23,36 @@ def test_static_config_skips_live_network_environment():
     assert config.hf_token == ""
 
 
+def test_static_inference_response_uses_java_file_schema(tmp_path):
+    stdout = io.StringIO()
+    output_path = tmp_path / "java-static.json"
+
+    exit_code = main(
+        [
+            "--task-id",
+            "payroll_net_pay_001",
+            "--max-repairs",
+            "0",
+            "--output",
+            str(output_path),
+            "--mode",
+            "static",
+        ],
+        env={},
+        stdout=stdout,
+    )
+
+    assert exit_code == 0
+    summary = json.loads(output_path.read_text(encoding="utf-8"))
+    response = summary["results"][0]["trajectory"]["model_turns"][0]["response"]
+    parsed = json.loads(response)
+
+    assert "files" in parsed
+    assert "code" not in parsed
+    assert "src/main/java/com/example/migration/MigrationService.java" in parsed["files"]
+    assert "public final class MigrationService" in parsed["files"]["src/main/java/com/example/migration/MigrationService.java"]
+
+
 def test_format_event_emits_strict_marker_and_stable_json_payload():
     line = format_event("STEP", {"task_id": "payroll_net_pay_001", "score": 0.0, "accepted": False})
 

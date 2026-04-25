@@ -21,7 +21,13 @@ from legacy_cobol_env.server.task_bank import TaskInstance, all_tasks, load_task
 
 
 VALID_MARKERS = {"START", "STEP", "END"}
-STATIC_RESPONSE = '{"code": "def migrate(input_record: str) -> str:\\n    return input_record\\n"}'
+STATIC_RESPONSE = (
+    '{"files":{"src/main/java/com/example/migration/MigrationService.java":'
+    '"package com.example.migration;\\n\\npublic final class MigrationService {\\n'
+    '    public String migrate(String inputRecord) {\\n'
+    '        return inputRecord;\\n'
+    '    }\\n}\\n"}}'
+)
 
 
 @dataclass(frozen=True)
@@ -98,7 +104,7 @@ class OpenAITextProvider:
             messages=[
                 {
                     "role": "system",
-                    "content": "Return only JSON with a single code field containing a Python migrate function.",
+                    "content": "Return only JSON with a files object mapping allowed Java source paths to Java source strings.",
                 },
                 {"role": "user", "content": prompt},
             ],

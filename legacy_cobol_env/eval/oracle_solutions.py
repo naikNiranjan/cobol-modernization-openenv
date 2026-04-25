@@ -1,11 +1,15 @@
-"""Deterministic reference candidate solutions for sanity and demo traces."""
+"""Deterministic reference Java file edits for sanity and demo traces."""
 
 from __future__ import annotations
 
 from legacy_cobol_env.server.task_bank import TaskInstance
 
 
-PAYROLL_SOLUTION = r'''
+MIGRATION_SERVICE_PATH = "src/main/java/com/example/migration/MigrationService.java"
+
+
+PYTHON_SOLUTIONS_BY_FAMILY = {
+    "decimal_copybook_payroll": r'''
 from decimal import Decimal, ROUND_HALF_UP
 
 
@@ -31,10 +35,8 @@ def migrate(input_record: str) -> str:
         category = "L"
     cents = int((net * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
     return f"{emp_id}{emp_name[:12].ljust(12)}{cents:09d}{category}"
-'''
-
-
-CUSTOMER_SOLUTION = r'''
+''',
+    "fixed_width_customer": r'''
 def migrate(input_record: str) -> str:
     cust_id = input_record[0:5]
     first = input_record[5:15].rstrip()
@@ -44,10 +46,8 @@ def migrate(input_record: str) -> str:
     balance = int(input_record[33:40])
     full_name = f"{last}, {first}"[:22].ljust(22)
     return f"{cust_id}{full_name}{zip_code}{status}{balance:08d}"
-'''
-
-
-CLAIMS_SOLUTION = r'''
+''',
+    "claims_eligibility_branching": r'''
 def migrate(input_record: str) -> str:
     claim_id = input_record[0:6]
     age = int(input_record[6:9])
@@ -66,10 +66,8 @@ def migrate(input_record: str) -> str:
     else:
         decision, reason = "A", "OK"
     return f"{claim_id}{decision}{reason}"
-'''
-
-
-ACCOUNT_SOLUTION = r'''
+''',
+    "account_status_level88": r'''
 def migrate(input_record: str) -> str:
     account_id = input_record[0:6]
     status = input_record[6:7]
@@ -88,10 +86,8 @@ def migrate(input_record: str) -> str:
     else:
         category, action = "OK", "N"
     return f"{account_id}{category}{action}"
-'''
-
-
-INVOICE_SOLUTION = r'''
+''',
+    "invoice_occurs_totals": r'''
 from decimal import Decimal, ROUND_HALF_UP
 
 
@@ -116,10 +112,8 @@ def migrate(input_record: str) -> str:
     cents = int((total * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
     flag = "H" if total >= Decimal("1000.00") else "L"
     return f"{invoice_id}{cents:09d}{count:02d}{flag}"
-'''
-
-
-DATE_SOLUTION = r'''
+''',
+    "date_normalization": r'''
 def is_leap(year: int) -> bool:
     return year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
 
@@ -141,21 +135,251 @@ def migrate(input_record: str) -> str:
     normalized = f"{year:04d}{mm:02d}{dd:02d}" if valid_date(year, mm, dd) else "00000000"
     valid = "Y" if normalized != "00000000" else "N"
     return f"{policy_id}{normalized}{valid}{amount}"
-'''
-
-
-SOLUTIONS_BY_FAMILY = {
-    "decimal_copybook_payroll": PAYROLL_SOLUTION,
-    "fixed_width_customer": CUSTOMER_SOLUTION,
-    "claims_eligibility_branching": CLAIMS_SOLUTION,
-    "account_status_level88": ACCOUNT_SOLUTION,
-    "invoice_occurs_totals": INVOICE_SOLUTION,
-    "date_normalization": DATE_SOLUTION,
+''',
 }
 
 
-def solution_for_task(task: TaskInstance) -> str:
+PAYROLL_SERVICE = r'''
+package com.example.migration;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+
+public final class MigrationService {
+    public String migrate(String inputRecord) {
+        String empId = inputRecord.substring(0, 6);
+        String empName = inputRecord.substring(6, 18);
+        BigDecimal gross = new BigDecimal(Integer.parseInt(inputRecord.substring(18, 27))).movePointLeft(2);
+        BigDecimal taxRate = new BigDecimal(Integer.parseInt(inputRecord.substring(27, 31))).movePointLeft(3);
+        String rawDeductions = inputRecord.substring(31, 39);
+        int sign = rawDeductions.charAt(0) == '-' ? -1 : 1;
+        BigDecimal deductions = new BigDecimal(sign * Long.parseLong(rawDeductions.substring(1))).movePointLeft(2);
+        BigDecimal tax = gross.multiply(taxRate).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal net = gross.subtract(tax).subtract(deductions);
+        if ("Y".equals(inputRecord.substring(39, 40))) {
+            net = net.add(new BigDecimal("50.00"));
+        }
+        if (net.compareTo(BigDecimal.ZERO) < 0) {
+            net = BigDecimal.ZERO.setScale(2);
+        }
+        String category = net.compareTo(new BigDecimal("5000.00")) >= 0 ? "H" : net.compareTo(new BigDecimal("2500.00")) >= 0 ? "M" : "L";
+        long cents = net.movePointRight(2).setScale(0, RoundingMode.HALF_UP).longValueExact();
+        return empId + padRight(empName, 12) + String.format("%09d", cents) + category;
+    }
+
+    private static String padRight(String value, int width) {
+        String clipped = value.length() > width ? value.substring(0, width) : value;
+        return String.format("%-" + width + "s", clipped);
+    }
+}
+'''
+
+
+CUSTOMER_SERVICE = r'''
+package com.example.migration;
+
+import java.math.BigDecimal;
+
+public final class MigrationService {
+    public String migrate(String inputRecord) {
+        String custId = inputRecord.substring(0, 5);
+        String first = inputRecord.substring(5, 15).stripTrailing();
+        String last = inputRecord.substring(15, 27).stripTrailing();
+        String zipCode = inputRecord.substring(27, 32);
+        String rawStatus = inputRecord.substring(32, 33);
+        BigDecimal balance = new BigDecimal(Integer.parseInt(inputRecord.substring(33, 40))).movePointLeft(2);
+        String status = rawStatus.equals("A") ? "O" : rawStatus.equals("S") ? "S" : "C";
+        String fullName = padRight(last + ", " + first, 22);
+        long cents = balance.movePointRight(2).longValueExact();
+        return custId + fullName + zipCode + status + String.format("%08d", cents);
+    }
+
+    private static String padRight(String value, int width) {
+        String clipped = value.length() > width ? value.substring(0, width) : value;
+        return String.format("%-" + width + "s", clipped);
+    }
+}
+'''
+
+
+CLAIMS_SERVICE = r'''
+package com.example.migration;
+
+import java.math.BigDecimal;
+
+public final class MigrationService {
+    public String migrate(String inputRecord) {
+        String claimId = inputRecord.substring(0, 6);
+        int age = Integer.parseInt(inputRecord.substring(6, 9));
+        String plan = inputRecord.substring(9, 10);
+        int days = Integer.parseInt(inputRecord.substring(10, 13));
+        String preauth = inputRecord.substring(13, 14);
+        BigDecimal amount = new BigDecimal(Integer.parseInt(inputRecord.substring(14, 21))).movePointLeft(2);
+        String decision;
+        String reason;
+        if (age < 18) {
+            decision = "D";
+            reason = "A1";
+        } else if (plan.equals("B") && amount.compareTo(new BigDecimal("1500.00")) > 0) {
+            decision = "R";
+            reason = "B2";
+        } else if (preauth.equals("N") && amount.compareTo(new BigDecimal("1000.00")) > 0) {
+            decision = "D";
+            reason = "P1";
+        } else if (days > 30) {
+            decision = "R";
+            reason = "L1";
+        } else {
+            decision = "A";
+            reason = "OK";
+        }
+        return claimId + decision + reason;
+    }
+}
+'''
+
+
+ACCOUNT_SERVICE = r'''
+package com.example.migration;
+
+import java.math.BigDecimal;
+
+public final class MigrationService {
+    public String migrate(String inputRecord) {
+        String accountId = inputRecord.substring(0, 6);
+        String status = inputRecord.substring(6, 7);
+        String rawBalance = inputRecord.substring(7, 16);
+        int sign = rawBalance.charAt(0) == '-' ? -1 : 1;
+        BigDecimal balance = new BigDecimal(sign * Long.parseLong(rawBalance.substring(1))).movePointLeft(2);
+        int days = Integer.parseInt(inputRecord.substring(16, 19));
+        String category;
+        String action;
+        if (status.equals("C")) {
+            category = "CL";
+            action = "N";
+        } else if (status.equals("F")) {
+            category = "FR";
+            action = "H";
+        } else if (days >= 90) {
+            category = "DL";
+            action = "C";
+        } else if (balance.compareTo(BigDecimal.ZERO) < 0) {
+            category = "OD";
+            action = "R";
+        } else {
+            category = "OK";
+            action = "N";
+        }
+        return accountId + category + action;
+    }
+}
+'''
+
+
+INVOICE_SERVICE = r'''
+package com.example.migration;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+
+public final class MigrationService {
+    public String migrate(String inputRecord) {
+        String invoiceId = inputRecord.substring(0, 6);
+        int count = Math.min(Integer.parseInt(inputRecord.substring(6, 8)), 4);
+        BigDecimal total = BigDecimal.ZERO.setScale(2);
+        for (int idx = 0; idx < count; idx++) {
+            int start = 8 + idx * 9;
+            int qty = Integer.parseInt(inputRecord.substring(start, start + 2));
+            BigDecimal price = new BigDecimal(Integer.parseInt(inputRecord.substring(start + 2, start + 8))).movePointLeft(2);
+            String taxCode = inputRecord.substring(start + 8, start + 9);
+            BigDecimal line = new BigDecimal(qty).multiply(price).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal tax = line.multiply(taxRate(taxCode)).setScale(2, RoundingMode.HALF_UP);
+            total = total.add(line.add(tax));
+        }
+        long cents = total.movePointRight(2).setScale(0, RoundingMode.HALF_UP).longValueExact();
+        String flag = total.compareTo(new BigDecimal("1000.00")) >= 0 ? "H" : "L";
+        return invoiceId + String.format("%09d", cents) + String.format("%02d", count) + flag;
+    }
+
+    private static BigDecimal taxRate(String taxCode) {
+        if (taxCode.equals("S")) {
+            return new BigDecimal("0.0725");
+        }
+        if (taxCode.equals("R")) {
+            return new BigDecimal("0.0250");
+        }
+        if (taxCode.equals("L")) {
+            return new BigDecimal("0.1000");
+        }
+        return BigDecimal.ZERO.setScale(4);
+    }
+}
+'''
+
+
+DATE_SERVICE = r'''
+package com.example.migration;
+
+import java.math.BigDecimal;
+
+public final class MigrationService {
+    public String migrate(String inputRecord) {
+        String policyId = inputRecord.substring(0, 6);
+        String raw = inputRecord.substring(6, 12);
+        int window = Integer.parseInt(inputRecord.substring(12, 14));
+        String amount = inputRecord.substring(14, 21);
+        BigDecimal parsedAmount = new BigDecimal(Integer.parseInt(amount)).movePointLeft(2);
+        if (parsedAmount.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("amount cannot be negative");
+        }
+        int yy = Integer.parseInt(raw.substring(0, 2));
+        int mm = Integer.parseInt(raw.substring(2, 4));
+        int dd = Integer.parseInt(raw.substring(4, 6));
+        int year = yy >= window ? 1900 + yy : 2000 + yy;
+        String normalized = validDate(year, mm, dd) ? String.format("%04d%02d%02d", year, mm, dd) : "00000000";
+        String valid = normalized.equals("00000000") ? "N" : "Y";
+        return policyId + normalized + valid + amount;
+    }
+
+    private static boolean validDate(int year, int month, int day) {
+        if (month < 1 || month > 12) {
+            return false;
+        }
+        int[] lengths = {31, isLeap(year) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+        return day >= 1 && day <= lengths[month - 1];
+    }
+
+    private static boolean isLeap(int year) {
+        return year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    }
+}
+'''
+
+
+JAVA_FILES_BY_FAMILY = {
+    "decimal_copybook_payroll": {MIGRATION_SERVICE_PATH: PAYROLL_SERVICE.strip() + "\n"},
+    "fixed_width_customer": {MIGRATION_SERVICE_PATH: CUSTOMER_SERVICE.strip() + "\n"},
+    "claims_eligibility_branching": {MIGRATION_SERVICE_PATH: CLAIMS_SERVICE.strip() + "\n"},
+    "account_status_level88": {MIGRATION_SERVICE_PATH: ACCOUNT_SERVICE.strip() + "\n"},
+    "invoice_occurs_totals": {MIGRATION_SERVICE_PATH: INVOICE_SERVICE.strip() + "\n"},
+    "date_normalization": {MIGRATION_SERVICE_PATH: DATE_SERVICE.strip() + "\n"},
+}
+
+
+def java_files_for_task(task: TaskInstance) -> dict[str, str]:
     try:
-        return SOLUTIONS_BY_FAMILY[task.family_id].strip() + "\n"
+        return dict(JAVA_FILES_BY_FAMILY[task.family_id])
     except KeyError as exc:
-        raise ValueError(f"no oracle solution for family: {task.family_id}") from exc
+        raise ValueError(f"no Java oracle solution for family: {task.family_id}") from exc
+
+
+def java_response_for_task(task: TaskInstance) -> dict[str, dict[str, str]]:
+    return {"files": java_files_for_task(task)}
+
+
+def solution_for_task(task: TaskInstance) -> str:
+    """Return the legacy Python oracle solution for untouched training code."""
+    try:
+        return PYTHON_SOLUTIONS_BY_FAMILY[task.family_id].strip() + "\n"
+    except KeyError as exc:
+        raise ValueError(f"no Python oracle solution for family: {task.family_id}") from exc

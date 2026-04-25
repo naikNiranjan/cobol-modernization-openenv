@@ -53,7 +53,7 @@ except ImportError:
     from server.task_bank import generate_fresh_tests, load_task
 
 
-MAX_STEPS = 12
+MAX_STEPS = 24
 
 
 class LegacyCobolEnvironment(MCPEnvironment):

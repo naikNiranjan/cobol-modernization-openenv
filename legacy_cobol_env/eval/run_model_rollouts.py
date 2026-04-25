@@ -9,7 +9,7 @@ from pathlib import Path
 from statistics import mean
 
 from legacy_cobol_env.eval.model_rollout import run_model_repair_rollout, run_model_rollout
-from legacy_cobol_env.eval.oracle_solutions import solution_for_task
+from legacy_cobol_env.eval.oracle_solutions import java_response_for_task
 from legacy_cobol_env.eval.providers import StaticResponseProvider, create_provider
 from legacy_cobol_env.server.task_bank import all_tasks, load_task
 
@@ -23,7 +23,7 @@ def run_rollouts(provider_name: str, task_id: str | None = None, max_repairs: in
     trajectories = []
     for task in tasks:
         provider = (
-            StaticResponseProvider("oracle-model", json.dumps({"code": solution_for_task(task)}))
+            StaticResponseProvider("oracle-model", json.dumps(java_response_for_task(task)))
             if provider_name == "oracle-model"
             else create_provider(provider_name, os.environ)
         )

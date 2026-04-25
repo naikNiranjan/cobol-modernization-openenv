@@ -57,7 +57,7 @@ class AzureOpenAIProvider:
             "messages": [
                 {
                     "role": "system",
-                    "content": "Return only JSON with a single code field containing a Python migrate function.",
+                    "content": "Return only JSON with a files object mapping allowed Java source paths to Java source strings.",
                 },
                 {"role": "user", "content": prompt},
             ],
@@ -108,7 +108,7 @@ class LocalTransformersProvider:
         messages = [
             {
                 "role": "system",
-                "content": "Return only JSON with a single code field containing a Python migrate function.",
+                "content": "Return only JSON with a files object mapping allowed Java source paths to Java source strings.",
             },
             {"role": "user", "content": prompt},
         ]
@@ -171,7 +171,13 @@ def create_provider(kind: str, env: Mapping[str, str]) -> TextProvider:
         )
 
     if kind == "static":
-        return StaticResponseProvider("static", env.get("STATIC_RESPONSE", '{"code": "def migrate(input_record: str) -> str:\\n    return input_record\\n"}'))
+        return StaticResponseProvider(
+            "static",
+            env.get(
+                "STATIC_RESPONSE",
+                '{"files":{"src/main/java/com/example/migration/MigrationService.java":"package com.example.migration;\\n\\npublic final class MigrationService {\\n    public String migrate(String inputRecord) {\\n        return inputRecord;\\n    }\\n}\\n"}}',
+            ),
+        )
 
     if kind == "local-transformers":
         if not env.get("LOCAL_MODEL_PATH"):
