@@ -7,6 +7,7 @@ Transformers, Datasets, PEFT, and TRL only when `run_sft_training` is called.
 from __future__ import annotations
 
 import argparse
+import inspect
 import json
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
@@ -34,6 +35,7 @@ class SFTArgs:
     lora_dropout: float = 0.05
     load_in_4bit: bool = True
     bf16: bool = True
+    completion_only_loss: bool = True
 
 
 def load_jsonl_rows(path: Path) -> list[dict[str, Any]]:
@@ -143,6 +145,7 @@ def run_sft_training(args: SFTArgs) -> None:
     try:
         from datasets import load_dataset
         from peft import LoraConfig
+        import torch
         from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
         from trl import SFTConfig, SFTTrainer
     except ImportError as exc:
@@ -160,7 +163,7 @@ def run_sft_training(args: SFTArgs) -> None:
         quantization_config = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype="bfloat16",
+            bnb_4bit_compute_dtype=torch.bfloat16 if args.bf16 else torch.float16,
         )
 
     model = AutoModelForCausalLM.from_pretrained(
@@ -187,18 +190,21 @@ def run_sft_training(args: SFTArgs) -> None:
         task_type="CAUSAL_LM",
         target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
     )
-    train_config = SFTConfig(
-        output_dir=args.output_dir,
-        max_length=args.max_seq_length,
-        num_train_epochs=args.num_train_epochs,
-        learning_rate=args.learning_rate,
-        per_device_train_batch_size=args.per_device_train_batch_size,
-        gradient_accumulation_steps=args.gradient_accumulation_steps,
-        logging_steps=1,
-        save_strategy="epoch",
-        bf16=args.bf16,
-        packing=False,
-    )
+    train_config_kwargs = {
+        "output_dir": args.output_dir,
+        "max_length": args.max_seq_length,
+        "num_train_epochs": args.num_train_epochs,
+        "learning_rate": args.learning_rate,
+        "per_device_train_batch_size": args.per_device_train_batch_size,
+        "gradient_accumulation_steps": args.gradient_accumulation_steps,
+        "logging_steps": 1,
+        "save_strategy": "epoch",
+        "bf16": args.bf16,
+        "packing": False,
+    }
+    if "completion_only_loss" in inspect.signature(SFTConfig).parameters:
+        train_config_kwargs["completion_only_loss"] = args.completion_only_loss
+    train_config = SFTConfig(**train_config_kwargs)
     trainer = SFTTrainer(
         model=model,
         args=train_config,
@@ -228,6 +234,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lora-dropout", type=float, default=0.05)
     parser.add_argument("--no-4bit", action="store_true")
     parser.add_argument("--no-bf16", action="store_true")
+    parser.add_argument("--no-completion-only-loss", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
 
@@ -248,6 +255,7 @@ def main() -> None:
         lora_dropout=parsed.lora_dropout,
         load_in_4bit=not parsed.no_4bit,
         bf16=not parsed.no_bf16,
+        completion_only_loss=not parsed.no_completion_only_loss,
     )
     if parsed.dry_run:
         plan = build_sft_plan(args)

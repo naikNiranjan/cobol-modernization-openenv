@@ -15,6 +15,16 @@ Artifact:
 
 - `outputs/training/java_oracle_sft.jsonl`
 
+Generate compact Java oracle SFT examples for smaller context windows:
+
+```bash
+PYTHONPATH=. python -m legacy_cobol_env.training.build_java_sft_dataset --compact
+```
+
+Artifact:
+
+- `outputs/training/java_oracle_sft_compact.jsonl`
+
 Java SFT is the current training starting point. Each row uses the active Java
 file-edit completion schema:
 
@@ -82,6 +92,30 @@ result and should not be described as model improvement.
 
 ## Next GPU Step
 
+Before retraining, audit prompt lengths and run a generation-only smoke test.
+The failed first Qwen2.5-Coder-3B adapter produced malformed Java
+(`cimport ...`) on `invoice_occurs_001`, so do not run full OpenEnv rollout
+until the smoke test emits valid Java `files` JSON.
+
+Length audit:
+
+```bash
+PYTHONPATH=. python -m legacy_cobol_env.training.audit_java_sft_lengths \
+  --dataset legacy_cobol_env/outputs/training/java_oracle_sft_compact.jsonl \
+  --model-name Qwen/Qwen2.5-Coder-3B-Instruct \
+  --max-seq-length 2048
+```
+
+Generation smoke test:
+
+```bash
+LOCAL_MODEL_PATH=Qwen/Qwen2.5-Coder-3B-Instruct \
+LOCAL_ADAPTER_PATH=legacy_cobol_env/outputs/training/java-sft-qwen-coder-3b \
+PYTHONPATH=. python -m legacy_cobol_env.training.smoke_generate_sft \
+  --compact \
+  --output legacy_cobol_env/outputs/evals/local_java_sft3b_invoice_generation_smoke.json
+```
+
 Use a small open code model for SFT warm-start, then evaluate with the same
 OpenEnv rollout harness. If SFT alone does not close the invoice gap, move to
 RL on the environment reward.
@@ -93,9 +127,28 @@ python -m venv .venv-gpu
 . .venv-gpu/bin/activate
 pip install -r legacy_cobol_env/training/requirements-gpu.txt
 pip install -e legacy_cobol_env
-PYTHONPATH=. python -m legacy_cobol_env.training.build_java_sft_dataset
-PYTHONPATH=. python -m legacy_cobol_env.training.train_sft --dry-run
-PYTHONPATH=. python -m legacy_cobol_env.training.train_sft
+PYTHONPATH=. python -m legacy_cobol_env.training.build_java_sft_dataset --compact
+PYTHONPATH=. python -m legacy_cobol_env.training.train_sft \
+  --dataset legacy_cobol_env/outputs/training/java_oracle_sft_compact.jsonl \
+  --model-name Qwen/Qwen2.5-Coder-3B-Instruct \
+  --output-dir legacy_cobol_env/outputs/training/java-sft-qwen-coder-3b \
+  --max-seq-length 4096 \
+  --num-train-epochs 3 \
+  --learning-rate 1e-4 \
+  --per-device-train-batch-size 1 \
+  --gradient-accumulation-steps 1 \
+  --no-bf16 \
+  --dry-run
+PYTHONPATH=. python -m legacy_cobol_env.training.train_sft \
+  --dataset legacy_cobol_env/outputs/training/java_oracle_sft_compact.jsonl \
+  --model-name Qwen/Qwen2.5-Coder-3B-Instruct \
+  --output-dir legacy_cobol_env/outputs/training/java-sft-qwen-coder-3b \
+  --max-seq-length 4096 \
+  --num-train-epochs 3 \
+  --learning-rate 1e-4 \
+  --per-device-train-batch-size 1 \
+  --gradient-accumulation-steps 1 \
+  --no-bf16
 ```
 
 `train_sft` now defaults to the Java dataset
@@ -103,6 +156,10 @@ PYTHONPATH=. python -m legacy_cobol_env.training.train_sft
 `legacy_cobol_env/outputs/training/java-sft-qwen-coder-7b`. The default model is
 `Qwen/Qwen2.5-Coder-7B-Instruct`, chosen as a conservative first GPU target.
 Override it with `--model-name` for a larger code model.
+
+For T4 GPUs, prefer the compact dataset, 3 to 5 epochs, `--no-bf16`, and a
+sequence length selected by the audit output. Avoid 20 epochs on six examples;
+it memorizes brittle continuations instead of reliable Java file-edit JSON.
 
 To dry-run the legacy Python dataset instead, pass the dataset and output
 directory explicitly:
@@ -114,18 +171,24 @@ PYTHONPATH=. python -m legacy_cobol_env.training.train_sft \
   --dry-run
 ```
 
-Evaluate the trained checkpoint:
+Smoke-test the trained checkpoint before OpenEnv rollout:
 
 ```bash
-LOCAL_MODEL_PATH=legacy_cobol_env/outputs/training/java-sft-qwen-coder-7b \
-PYTHONPATH=. python -m legacy_cobol_env.eval.run_model_rollouts \
-  --provider local-transformers \
+LOCAL_MODEL_PATH=Qwen/Qwen2.5-Coder-3B-Instruct \
+LOCAL_ADAPTER_PATH=legacy_cobol_env/outputs/training/java-sft-qwen-coder-3b \
+PYTHONPATH=. python -m legacy_cobol_env.training.smoke_generate_sft \
+  --compact \
   --task-id invoice_occurs_001 \
-  --max-repairs 1 \
-  --output legacy_cobol_env/outputs/evals/local_sft_invoice_rollout.json
+  --output legacy_cobol_env/outputs/evals/local_java_sft3b_invoice_generation_smoke.json
 ```
 
-Success criterion:
+Smoke success criterion:
+
+- `validation.valid_schema` is `true`.
+- `validation.valid_edits` is `true`.
+- the response is Java `files` JSON, not free-form Java or Python `code`.
+
+OpenEnv rollout success criterion after the smoke test passes:
 
 - invoice public score improves over the current rerun baseline, ideally to
   0.80+ accepted.
