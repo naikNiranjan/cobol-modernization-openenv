@@ -15,8 +15,17 @@ Artifact:
 
 - `outputs/training/oracle_sft.jsonl`
 
-The JSONL uses chat-style records with a workbench prompt as the user message
-and a JSON `{"code": "..."}` response as the assistant message.
+The current public rollout schema is Java file-edit JSON:
+
+```json
+{
+  "files": {
+    "src/main/java/com/example/migration/MigrationService.java": "...java source..."
+  }
+}
+```
+
+The training generator is retained for compatibility until the Java SFT phase updates it. Do not treat the existing warm-start JSONL as the primary Java evaluation artifact.
 
 ## Current Training Target
 

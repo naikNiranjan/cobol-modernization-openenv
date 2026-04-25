@@ -1,15 +1,15 @@
 # COBOL-to-Java OpenEnv Implementation Plan
 
-This plan starts from the current `cobol-modernization-openenv` repo and turns it from a COBOL-to-Python environment into a COBOL-to-Java modernization workbench.
+This plan started from the original `cobol-modernization-openenv` repo and turns it from a COBOL-to-Python environment into a COBOL-to-Java modernization workbench.
 
 The implementation strategy is intentionally non-destructive at first: add Java support beside the existing Python path, prove the Java runner and rewards, then make Java the primary public environment once the test gates pass.
 
-## 1. Current Repo Cleanup Position
+## 1. Initial Repo Cleanup Position
 
-### What is clean now
+### What was clean at plan start
 
 - The repo is cloned at `/Users/niranjannaiks/cobol-modernization-openenv`.
-- Git status only shows new planning documentation.
+- Git status only showed new planning documentation.
 - The accidental home-level audit file has been removed.
 - No generated outputs, old plots, or Python environment files have been deleted.
 
@@ -472,7 +472,7 @@ Changes:
 
 - update `model_rollout.py`,
 - update `trajectory.py`,
-- update prompt schema from `{"code": ...}` to `{"files": {...}}`,
+- update prompt schema from legacy Python code JSON to `{"files": {...}}`,
 - update repair prompt to include visible JUnit diagnostics,
 - update `inference.py` static/provider behavior.
 

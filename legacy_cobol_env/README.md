@@ -1,5 +1,5 @@
 ---
-title: Legacy COBOL Migration Workbench
+title: Legacy COBOL-to-Java Migration Workbench
 emoji: 🧾
 colorFrom: blue
 colorTo: green
@@ -13,11 +13,15 @@ tags:
   - reinforcement-learning
 ---
 
-# Legacy COBOL Migration Workbench
+# Legacy COBOL-to-Java Migration Workbench
 
-An OpenEnv environment where an agent acts like a legacy modernization engineer. The agent receives a migration ticket, inspects COBOL and copybooks through tools, writes Python, runs visible tests, studies diffs, and submits a final migration scored on hidden and fresh tests.
+An OpenEnv environment where an agent acts like a legacy modernization engineer. The agent receives a migration ticket, inspects COBOL and copybooks through tools, edits Java source files, runs Maven/JUnit visible tests, and submits a final Java migration scored on hidden and fresh tests.
 
-The current build includes six judge-facing task families covering payroll, customer records, insurance claims, banking account status, invoice OCCURS tables, and legacy date normalization.
+The current build includes six judge-facing task families covering payroll, customer records, insurance claims, banking account status, invoice OCCURS tables, and legacy date normalization. The Python path still exists for backward compatibility, but Java is the primary public demo and evaluation path.
+
+## Problem
+
+This environment frames COBOL-to-Java modernization as a long-horizon professional task. A model must inspect fixed-width COBOL layouts, infer business rules, preserve exact record widths, handle implied decimals with Java types such as `BigDecimal`, respond to compiler/test feedback, and produce maintainable Java that generalizes beyond visible examples.
 
 ## Environment Overview
 
@@ -27,20 +31,47 @@ Each episode starts with a partial ticket. The agent can discover details throug
 - `read_copybook`
 - `parse_copybook_layout`
 - `inspect_business_rules`
-- `write_python_solution`
-- `run_visible_tests`
-- `inspect_diff`
+- `get_source_to_java_metadata`
+- `generate_java_skeleton`
+- `read_java_file`
+- `edit_java_file`
+- `run_junit_tests`
+- `inspect_test_failure`
 - `submit_final`
 
-The submitted Python code must define:
+The primary Java tool sequence is:
 
-```python
-def migrate(input_record: str) -> str:
-    ...
+```text
+read_cobol_file -> read_copybook -> parse_copybook_layout ->
+inspect_business_rules -> get_source_to_java_metadata ->
+generate_java_skeleton -> edit_java_file -> run_junit_tests -> submit_final
 ```
 
-The final score combines hidden correctness, fresh generated tests, interface checks, layout fidelity, anti-hardcoding, and safety.
-Episodes are capped at 12 tool steps. The next action returns a terminal no-op reward of `0.0`, and all post-terminal mutations are blocked.
+If visible JUnit tests fail, the agent can call `inspect_test_failure` and repair the same Java file-edit JSON. The environment also keeps `write_python_solution`, `run_visible_tests`, and `inspect_diff` for backward compatibility with older callers; they are not the primary rollout path.
+
+The generated Java project uses package `com.example.migration`. The required class is `MigrationService`, with this method:
+
+```java
+public String migrate(String inputRecord)
+```
+
+Allowed editable files are:
+
+- `src/main/java/com/example/migration/MigrationService.java`
+- `src/main/java/com/example/migration/RecordParser.java`
+- `src/main/java/com/example/migration/RecordFormatter.java`
+
+Model completions must return only Java file-edit JSON:
+
+```json
+{
+  "files": {
+    "src/main/java/com/example/migration/MigrationService.java": "...java source..."
+  }
+}
+```
+
+The final score combines Java compile/JUnit results, hidden and fresh pass rates, type/decimal fidelity, fixed-width layout fidelity, anti-hardcoding checks, and safety. Episodes are capped by the environment step limit. The next action after terminal returns a no-op reward of `0.0`, and all post-terminal mutations are blocked.
 
 ## Quick Start
 
@@ -49,6 +80,8 @@ python -m venv .venv
 .venv/bin/pip install -e ".[dev]"
 .venv/bin/python -m pytest -q
 ```
+
+Java validation requires Java 17+ and Maven on `PATH`. Without Maven, Java runner tests return structured failures or pytest skips instead of crashing.
 
 Run the server locally:
 
@@ -81,15 +114,16 @@ docker stop legacy-cobol-env-smoke
 
 ```text
 final_reward =
-  0.55 * hidden_correctness
-+ 0.15 * fresh_correctness
-+ 0.10 * interface_contract
-+ 0.08 * type_and_layout_fidelity
-+ 0.07 * anti_hardcoding
+  0.12 * java_compile
++ 0.45 * hidden_junit_pass_rate
++ 0.15 * fresh_junit_pass_rate
++ 0.10 * type_and_decimal_fidelity
++ 0.08 * layout_fidelity
++ 0.05 * anti_hardcoding
 + 0.05 * safety
 ```
 
-Visible tests are for debugging. Hidden and fresh case details are not revealed to the agent after final submission.
+Visible JUnit tests are for debugging and repair. Final submission runs hidden JUnit cases and generated fresh tests through `evaluate_java_files`; aggregate hidden/fresh counts are returned, but hidden/fresh case details and expected outputs are not revealed. The fresh split and anti-hardcoding checks are intended to penalize visible-output memorization.
 
 ## Task Families
 
@@ -124,13 +158,13 @@ Artifacts:
 - `outputs/evals/baseline_results.json`
 - `plots/baseline_scores.svg`
 
-Run oracle sanity trajectories:
+Run Java oracle sanity trajectories:
 
 ```bash
 PYTHONPATH=. .venv/bin/python legacy_cobol_env/eval/run_oracles.py
 ```
 
-Current oracle sanity result:
+Current Java oracle sanity result:
 
 ```text
 mean public score  1.0
@@ -141,7 +175,7 @@ Artifact:
 
 - `outputs/evals/oracle_trajectories.json`
 
-Run provider-backed model rollouts:
+Run provider-backed model rollouts. The `oracle-model` provider returns Java `files` JSON and exercises the same Java tool path as model completions:
 
 ```bash
 PYTHONPATH=. .venv/bin/python -m legacy_cobol_env.eval.run_model_rollouts --provider oracle-model
@@ -177,13 +211,24 @@ Artifact:
 
 - `outputs/evals/cobol_invoice_oracle_check.json`
 
-Current regenerated local evidence:
+Current regenerated Java evidence:
 
 | Policy | Mean public score | Accepted tasks |
 | --- | ---: | ---: |
 | deterministic identity | 0.1500 | 0 / 6 |
 | deterministic blank width | 0.1767 | 0 / 6 |
 | `oracle-model` plumbing check | 1.0000 | 6 / 6 |
+
+Latest Azure ML validation:
+
+| Test file | Result |
+| --- | --- |
+| `legacy_cobol_env/tests/test_model_rollout.py` | 6 passed |
+| `legacy_cobol_env/tests/test_inference_contract.py` | 6 passed |
+| `legacy_cobol_env/tests/test_eval_harness.py` | 2 passed with Maven/JUnit |
+| `legacy_cobol_env/tests/test_java_runner.py` | 18 passed |
+| `legacy_cobol_env/tests/test_environment.py` | 24 passed |
+| `legacy_cobol_env/tests/test_api_contract.py` | 6 passed |
 
 The previous Azure `gpt-5.4-mini` artifacts are kept for comparison, but `run_evidence_report` skips them because they were produced before the invoice task was hardened into a multi-file tax-code task. Rerun live Azure rollouts after local gates pass.
 
@@ -203,13 +248,19 @@ Artifacts:
 - `outputs/evals/score_summary.json`
 - `plots/model_scores.svg`
 
-Run the root submission inference script:
+Run the root submission inference script in static mode:
+
+```bash
+python inference.py --mode static --max-repairs 0 --output /tmp/java-static.json
+```
+
+Run the root submission inference script against Azure OpenAI or another OpenAI-compatible endpoint:
 
 ```bash
 API_BASE_URL="https://..." MODEL_NAME="..." HF_TOKEN="..." python inference.py --max-repairs 1
 ```
 
-The root script uses `openai.OpenAI`, emits `[START]`, one `[STEP]` per task, and `[END]`, and defaults to all six tasks.
+The root script uses `openai.OpenAI`, emits `[START]`, one `[STEP]` per task, and `[END]`, prompts for Java file-edit JSON, and defaults to all six tasks.
 
 Generate SFT warm-start data:
 
@@ -249,25 +300,26 @@ PYTHONPATH=. .venv/bin/python -m legacy_cobol_env.eval.run_model_rollouts \
 Implemented:
 
 - Six end-to-end task families with visible, hidden, and fresh tests
-- MCP workbench tools
+- Java OpenEnv tool path with Maven/JUnit visible and final validation
+- Java file-edit model schema
 - Structured visible diffs
-- Basic AST and subprocess sandbox checks
+- Java source safety checks plus the legacy Python sandbox checks
 - Direct environment tests
 - Deterministic baseline evaluation harness
-- Oracle sanity solutions and JSON workbench trajectories
+- Java oracle solutions and JSON workbench trajectories
 - Provider-backed model rollout harness for Azure OpenAI and Hugging Face endpoints
 - Compiler-backed GnuCOBOL oracle check for the hard invoice task
 - Root Dockerfile, root `inference.py`, root `openenv.yaml`, and root README for submission gates
 - Typed project action, observation, reward, and state schemas surfaced at `/schema`
 - Max-step and post-terminal no-op enforcement
-- Score summary, model-score plot, oracle SFT warm-start dataset, and SFT dry-run artifacts
+- Score summary, model-score plot, legacy oracle SFT warm-start dataset, and SFT dry-run artifacts
 
 Next:
 
 - Rerun Azure `gpt-5.4-mini` zero-shot and repair baselines against the hardened invoice task
-- Run SFT on GPU, then evaluate invoice before deciding whether RL/GRPO is needed
+- Update SFT/training data to Java file-edit examples before GPU training
 - Push to Hugging Face Spaces with `openenv push`
 
 ## Safety Note
 
-The sandbox blocks common unsafe imports and builtins, runs candidate code in a temporary subprocess, clears environment variables, and applies a timeout. It should still be treated as layered mitigation for a hackathon environment, not as a complete secure isolation boundary.
+The Java runner rejects unsafe source patterns such as process exit/runtime access, restricts edits to allowed Java paths, generates tests into a temporary Maven project, and applies a timeout. The legacy Python sandbox also remains for compatibility. These checks should still be treated as layered mitigation for a hackathon environment, not as complete secure isolation.

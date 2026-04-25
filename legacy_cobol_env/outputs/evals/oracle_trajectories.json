@@ -24,12 +24,18 @@
         "hidden_tests": 5,
         "input_width": 42,
         "output_width": 28,
-        "max_steps": 12,
+        "max_steps": 24,
         "allowed_tools": [
           "read_cobol_file",
           "read_copybook",
           "parse_copybook_layout",
           "inspect_business_rules",
+          "get_source_to_java_metadata",
+          "generate_java_skeleton",
+          "read_java_file",
+          "edit_java_file",
+          "run_junit_tests",
+          "inspect_test_failure",
           "write_python_solution",
           "run_visible_tests",
           "inspect_diff",
@@ -46,10 +52,11 @@
         "public_score": 1.0,
         "accepted": true,
         "components": {
-          "hidden_correctness": 1.0,
-          "fresh_correctness": 1.0,
-          "interface_contract": 1.0,
-          "type_and_layout_fidelity": 1.0,
+          "java_compile": 1.0,
+          "hidden_junit_pass_rate": 1.0,
+          "fresh_junit_pass_rate": 1.0,
+          "type_and_decimal_fidelity": 1.0,
+          "layout_fidelity": 1.0,
           "anti_hardcoding": 1.0,
           "safety": 1.0
         },
@@ -181,25 +188,279 @@
           }
         },
         {
-          "tool_name": "write_python_solution",
-          "arguments": {
-            "code_chars": 964
-          },
+          "tool_name": "get_source_to_java_metadata",
+          "arguments": {},
           "reward": 0.02,
           "done": false,
           "result": {
             "ok": true,
-            "draft_id": 1,
-            "syntax_ok": true,
-            "safety_ok": true,
-            "error": null
+            "package_name": "com.example.migration",
+            "required_class": "MigrationService",
+            "required_method": "public String migrate(String inputRecord)",
+            "allowed_editable_paths": [
+              "src/main/java/com/example/migration/MigrationService.java",
+              "src/main/java/com/example/migration/RecordFormatter.java",
+              "src/main/java/com/example/migration/RecordParser.java"
+            ],
+            "input_width": 42,
+            "output_width": 28,
+            "copybook_field_mappings": [
+              {
+                "name": "EMP-ID",
+                "start": 0,
+                "end": 6,
+                "length": 6,
+                "pic": "X(6)",
+                "python_type": "str",
+                "java_type": "String",
+                "parse_hint": "parse by fixed-width substring offsets"
+              },
+              {
+                "name": "EMP-NAME",
+                "start": 6,
+                "end": 18,
+                "length": 12,
+                "pic": "X(12)",
+                "python_type": "str",
+                "java_type": "String",
+                "parse_hint": "parse by fixed-width substring offsets"
+              },
+              {
+                "name": "GROSS-PAY",
+                "start": 18,
+                "end": 27,
+                "length": 9,
+                "pic": "9(7)V99",
+                "python_type": "Decimal",
+                "scale": 2,
+                "java_type": "BigDecimal",
+                "parse_hint": "parse as implied decimal with scale 2 using BigDecimal"
+              },
+              {
+                "name": "TAX-RATE",
+                "start": 27,
+                "end": 31,
+                "length": 4,
+                "pic": "9V999",
+                "python_type": "Decimal",
+                "scale": 3,
+                "java_type": "BigDecimal",
+                "parse_hint": "parse as implied decimal with scale 3 using BigDecimal"
+              },
+              {
+                "name": "DEDUCTIONS",
+                "start": 31,
+                "end": 39,
+                "length": 8,
+                "pic": "S9(5)V99 SIGN LEADING SEPARATE",
+                "python_type": "Decimal",
+                "scale": 2,
+                "java_type": "BigDecimal",
+                "parse_hint": "parse as implied decimal with scale 2 using BigDecimal"
+              },
+              {
+                "name": "BONUS-FLAG",
+                "start": 39,
+                "end": 40,
+                "length": 1,
+                "pic": "X(1)",
+                "python_type": "str",
+                "level_88": {
+                  "BONUS-ELIGIBLE": "Y",
+                  "NO-BONUS": "N"
+                },
+                "java_type": "String",
+                "parse_hint": "parse by fixed-width substring offsets"
+              },
+              {
+                "name": "FILLER",
+                "start": 40,
+                "end": 42,
+                "length": 2,
+                "pic": "X(2)",
+                "python_type": "str",
+                "java_type": "String",
+                "parse_hint": "parse by fixed-width substring offsets"
+              }
+            ],
+            "output_layout": [
+              {
+                "name": "OUT-EMP-ID",
+                "start": 0,
+                "end": 6,
+                "length": 6,
+                "pic": "X(6)",
+                "python_type": "str"
+              },
+              {
+                "name": "OUT-EMP-NAME",
+                "start": 6,
+                "end": 18,
+                "length": 12,
+                "pic": "X(12)",
+                "python_type": "str"
+              },
+              {
+                "name": "OUT-NET-PAY",
+                "start": 18,
+                "end": 27,
+                "length": 9,
+                "pic": "9(7)V99",
+                "python_type": "str"
+              },
+              {
+                "name": "OUT-PAY-CATEGORY",
+                "start": 27,
+                "end": 28,
+                "length": 1,
+                "pic": "X",
+                "python_type": "str"
+              }
+            ],
+            "java_type_hints": {
+              "copybook_fields": {
+                "EMP-ID": {
+                  "java_type": "String",
+                  "pic": "X(6)",
+                  "scale": null
+                },
+                "EMP-NAME": {
+                  "java_type": "String",
+                  "pic": "X(12)",
+                  "scale": null
+                },
+                "GROSS-PAY": {
+                  "java_type": "BigDecimal",
+                  "pic": "9(7)V99",
+                  "scale": 2
+                },
+                "TAX-RATE": {
+                  "java_type": "BigDecimal",
+                  "pic": "9V999",
+                  "scale": 3
+                },
+                "DEDUCTIONS": {
+                  "java_type": "BigDecimal",
+                  "pic": "S9(5)V99 SIGN LEADING SEPARATE",
+                  "scale": 2
+                },
+                "BONUS-FLAG": {
+                  "java_type": "String",
+                  "pic": "X(1)",
+                  "scale": null
+                },
+                "FILLER": {
+                  "java_type": "String",
+                  "pic": "X(2)",
+                  "scale": null
+                }
+              },
+              "output_fields": {
+                "OUT-EMP-ID": {
+                  "java_type": "String",
+                  "pic": "X(6)",
+                  "fixed_width": 6
+                },
+                "OUT-EMP-NAME": {
+                  "java_type": "String",
+                  "pic": "X(12)",
+                  "fixed_width": 12
+                },
+                "OUT-NET-PAY": {
+                  "java_type": "BigDecimal",
+                  "pic": "9(7)V99",
+                  "fixed_width": 9
+                },
+                "OUT-PAY-CATEGORY": {
+                  "java_type": "String",
+                  "pic": "X",
+                  "fixed_width": 1
+                }
+              },
+              "money_and_implied_decimals": "Use java.math.BigDecimal and RoundingMode.HALF_UP for PIC fields with implied decimals.",
+              "fixed_width_strings": "Use substring offsets from copybook_field_mappings and pad/truncate output fields exactly."
+            },
+            "fixed_width_contract": {
+              "input_record_name": "EMPLOYEE-PAY-RECORD",
+              "output_layout": [
+                {
+                  "name": "OUT-EMP-ID",
+                  "start": 0,
+                  "end": 6,
+                  "length": 6,
+                  "pic": "X(6)",
+                  "python_type": "str"
+                },
+                {
+                  "name": "OUT-EMP-NAME",
+                  "start": 6,
+                  "end": 18,
+                  "length": 12,
+                  "pic": "X(12)",
+                  "python_type": "str"
+                },
+                {
+                  "name": "OUT-NET-PAY",
+                  "start": 18,
+                  "end": 27,
+                  "length": 9,
+                  "pic": "9(7)V99",
+                  "python_type": "str"
+                },
+                {
+                  "name": "OUT-PAY-CATEGORY",
+                  "start": 27,
+                  "end": 28,
+                  "length": 1,
+                  "pic": "X",
+                  "python_type": "str"
+                }
+              ]
+            }
           }
         },
         {
-          "tool_name": "run_visible_tests",
+          "tool_name": "generate_java_skeleton",
+          "arguments": {},
+          "reward": 0.03,
+          "done": false,
+          "result": {
+            "ok": true,
+            "package_name": "com.example.migration",
+            "required_class": "MigrationService",
+            "editable_files": [
+              "src/main/java/com/example/migration/MigrationService.java",
+              "src/main/java/com/example/migration/RecordFormatter.java",
+              "src/main/java/com/example/migration/RecordParser.java"
+            ],
+            "submit_final": "After edit_java_file, submit_final with no draft_id scores the latest Java draft; explicit Python draft_id preserves Python scoring."
+          }
+        },
+        {
+          "tool_name": "edit_java_file",
           "arguments": {
-            "draft_id": 1
+            "path": "src/main/java/com/example/migration/MigrationService.java",
+            "content_chars": 1664
           },
+          "reward": 0.03,
+          "done": false,
+          "result": {
+            "ok": true,
+            "path": "src/main/java/com/example/migration/MigrationService.java",
+            "draft_id": 1,
+            "version": 1,
+            "safety_ok": true,
+            "editable_files": [
+              "src/main/java/com/example/migration/MigrationService.java",
+              "src/main/java/com/example/migration/RecordFormatter.java",
+              "src/main/java/com/example/migration/RecordParser.java"
+            ],
+            "submit_final": "submit_final with no draft_id scores the latest Java draft; explicit Python draft_id preserves Python scoring."
+          }
+        },
+        {
+          "tool_name": "run_junit_tests",
+          "arguments": {},
           "reward": 0.05,
           "done": false,
           "result": {
@@ -208,19 +469,18 @@
             "passed": 3,
             "total": 3,
             "pass_rate": 1.0,
-            "syntax_ok": true,
+            "compile_ok": true,
             "safety_ok": true,
-            "interface_ok": true,
             "timed_out": false,
             "error": null,
-            "failures": []
+            "failures": [],
+            "java_final_eligible": true,
+            "submit_final": "submit_final with no draft_id scores the latest Java draft; explicit Python draft_id preserves Python scoring."
           }
         },
         {
           "tool_name": "submit_final",
-          "arguments": {
-            "draft_id": 1
-          },
+          "arguments": {},
           "reward": 1.0,
           "done": true,
           "result": {
@@ -229,18 +489,20 @@
             "episode_done": true,
             "public_score": 1.0,
             "components": {
-              "hidden_correctness": 1.0,
-              "fresh_correctness": 1.0,
-              "interface_contract": 1.0,
-              "type_and_layout_fidelity": 1.0,
+              "java_compile": 1.0,
+              "hidden_junit_pass_rate": 1.0,
+              "fresh_junit_pass_rate": 1.0,
+              "type_and_decimal_fidelity": 1.0,
+              "layout_fidelity": 1.0,
               "anti_hardcoding": 1.0,
               "safety": 1.0
             },
+            "draft_id": 1,
             "hidden_passed": 5,
             "hidden_total": 5,
             "fresh_passed": 6,
             "fresh_total": 6,
-            "notes": "Hidden and fresh case details are not revealed to the agent."
+            "notes": "Java final scoring used hidden and fresh JUnit tests; hidden and fresh case details are not revealed."
           }
         }
       ]
@@ -265,12 +527,18 @@
         "hidden_tests": 3,
         "input_width": 40,
         "output_width": 41,
-        "max_steps": 12,
+        "max_steps": 24,
         "allowed_tools": [
           "read_cobol_file",
           "read_copybook",
           "parse_copybook_layout",
           "inspect_business_rules",
+          "get_source_to_java_metadata",
+          "generate_java_skeleton",
+          "read_java_file",
+          "edit_java_file",
+          "run_junit_tests",
+          "inspect_test_failure",
           "write_python_solution",
           "run_visible_tests",
           "inspect_diff",
@@ -287,10 +555,11 @@
         "public_score": 1.0,
         "accepted": true,
         "components": {
-          "hidden_correctness": 1.0,
-          "fresh_correctness": 1.0,
-          "interface_contract": 1.0,
-          "type_and_layout_fidelity": 1.0,
+          "java_compile": 1.0,
+          "hidden_junit_pass_rate": 1.0,
+          "fresh_junit_pass_rate": 1.0,
+          "type_and_decimal_fidelity": 1.0,
+          "layout_fidelity": 1.0,
           "anti_hardcoding": 1.0,
           "safety": 1.0
         },
@@ -407,25 +676,279 @@
           }
         },
         {
-          "tool_name": "write_python_solution",
-          "arguments": {
-            "code_chars": 405
-          },
+          "tool_name": "get_source_to_java_metadata",
+          "arguments": {},
           "reward": 0.02,
           "done": false,
           "result": {
             "ok": true,
-            "draft_id": 1,
-            "syntax_ok": true,
-            "safety_ok": true,
-            "error": null
+            "package_name": "com.example.migration",
+            "required_class": "MigrationService",
+            "required_method": "public String migrate(String inputRecord)",
+            "allowed_editable_paths": [
+              "src/main/java/com/example/migration/MigrationService.java",
+              "src/main/java/com/example/migration/RecordFormatter.java",
+              "src/main/java/com/example/migration/RecordParser.java"
+            ],
+            "input_width": 40,
+            "output_width": 41,
+            "copybook_field_mappings": [
+              {
+                "name": "CUST-ID",
+                "start": 0,
+                "end": 5,
+                "length": 5,
+                "pic": "X(5)",
+                "python_type": "str",
+                "java_type": "String",
+                "parse_hint": "parse by fixed-width substring offsets"
+              },
+              {
+                "name": "FIRST-NAME",
+                "start": 5,
+                "end": 15,
+                "length": 10,
+                "pic": "X(10)",
+                "python_type": "str",
+                "java_type": "String",
+                "parse_hint": "parse by fixed-width substring offsets"
+              },
+              {
+                "name": "LAST-NAME",
+                "start": 15,
+                "end": 27,
+                "length": 12,
+                "pic": "X(12)",
+                "python_type": "str",
+                "java_type": "String",
+                "parse_hint": "parse by fixed-width substring offsets"
+              },
+              {
+                "name": "ZIP-CODE",
+                "start": 27,
+                "end": 32,
+                "length": 5,
+                "pic": "9(5)",
+                "python_type": "str",
+                "java_type": "String",
+                "parse_hint": "parse by fixed-width substring offsets"
+              },
+              {
+                "name": "STATUS-CODE",
+                "start": 32,
+                "end": 33,
+                "length": 1,
+                "pic": "X",
+                "python_type": "str",
+                "java_type": "String",
+                "parse_hint": "parse by fixed-width substring offsets"
+              },
+              {
+                "name": "BALANCE-DUE",
+                "start": 33,
+                "end": 40,
+                "length": 7,
+                "pic": "9(5)V99",
+                "python_type": "Decimal",
+                "scale": 2,
+                "java_type": "BigDecimal",
+                "parse_hint": "parse as implied decimal with scale 2 using BigDecimal"
+              }
+            ],
+            "output_layout": [
+              {
+                "name": "OUT-CUST-ID",
+                "start": 0,
+                "end": 5,
+                "length": 5,
+                "pic": "X(5)",
+                "python_type": "str"
+              },
+              {
+                "name": "OUT-FULL-NAME",
+                "start": 5,
+                "end": 27,
+                "length": 22,
+                "pic": "X(22)",
+                "python_type": "str"
+              },
+              {
+                "name": "OUT-ZIP-CODE",
+                "start": 27,
+                "end": 32,
+                "length": 5,
+                "pic": "9(5)",
+                "python_type": "str"
+              },
+              {
+                "name": "OUT-STATUS",
+                "start": 32,
+                "end": 33,
+                "length": 1,
+                "pic": "X",
+                "python_type": "str"
+              },
+              {
+                "name": "OUT-BALANCE",
+                "start": 33,
+                "end": 41,
+                "length": 8,
+                "pic": "9(6)V99",
+                "python_type": "str"
+              }
+            ],
+            "java_type_hints": {
+              "copybook_fields": {
+                "CUST-ID": {
+                  "java_type": "String",
+                  "pic": "X(5)",
+                  "scale": null
+                },
+                "FIRST-NAME": {
+                  "java_type": "String",
+                  "pic": "X(10)",
+                  "scale": null
+                },
+                "LAST-NAME": {
+                  "java_type": "String",
+                  "pic": "X(12)",
+                  "scale": null
+                },
+                "ZIP-CODE": {
+                  "java_type": "String",
+                  "pic": "9(5)",
+                  "scale": null
+                },
+                "STATUS-CODE": {
+                  "java_type": "String",
+                  "pic": "X",
+                  "scale": null
+                },
+                "BALANCE-DUE": {
+                  "java_type": "BigDecimal",
+                  "pic": "9(5)V99",
+                  "scale": 2
+                }
+              },
+              "output_fields": {
+                "OUT-CUST-ID": {
+                  "java_type": "String",
+                  "pic": "X(5)",
+                  "fixed_width": 5
+                },
+                "OUT-FULL-NAME": {
+                  "java_type": "String",
+                  "pic": "X(22)",
+                  "fixed_width": 22
+                },
+                "OUT-ZIP-CODE": {
+                  "java_type": "String",
+                  "pic": "9(5)",
+                  "fixed_width": 5
+                },
+                "OUT-STATUS": {
+                  "java_type": "String",
+                  "pic": "X",
+                  "fixed_width": 1
+                },
+                "OUT-BALANCE": {
+                  "java_type": "BigDecimal",
+                  "pic": "9(6)V99",
+                  "fixed_width": 8
+                }
+              },
+              "money_and_implied_decimals": "Use java.math.BigDecimal and RoundingMode.HALF_UP for PIC fields with implied decimals.",
+              "fixed_width_strings": "Use substring offsets from copybook_field_mappings and pad/truncate output fields exactly."
+            },
+            "fixed_width_contract": {
+              "input_record_name": "CUSTOMER-RECORD",
+              "output_layout": [
+                {
+                  "name": "OUT-CUST-ID",
+                  "start": 0,
+                  "end": 5,
+                  "length": 5,
+                  "pic": "X(5)",
+                  "python_type": "str"
+                },
+                {
+                  "name": "OUT-FULL-NAME",
+                  "start": 5,
+                  "end": 27,
+                  "length": 22,
+                  "pic": "X(22)",
+                  "python_type": "str"
+                },
+                {
+                  "name": "OUT-ZIP-CODE",
+                  "start": 27,
+                  "end": 32,
+                  "length": 5,
+                  "pic": "9(5)",
+                  "python_type": "str"
+                },
+                {
+                  "name": "OUT-STATUS",
+                  "start": 32,
+                  "end": 33,
+                  "length": 1,
+                  "pic": "X",
+                  "python_type": "str"
+                },
+                {
+                  "name": "OUT-BALANCE",
+                  "start": 33,
+                  "end": 41,
+                  "length": 8,
+                  "pic": "9(6)V99",
+                  "python_type": "str"
+                }
+              ]
+            }
           }
         },
         {
-          "tool_name": "run_visible_tests",
+          "tool_name": "generate_java_skeleton",
+          "arguments": {},
+          "reward": 0.03,
+          "done": false,
+          "result": {
+            "ok": true,
+            "package_name": "com.example.migration",
+            "required_class": "MigrationService",
+            "editable_files": [
+              "src/main/java/com/example/migration/MigrationService.java",
+              "src/main/java/com/example/migration/RecordFormatter.java",
+              "src/main/java/com/example/migration/RecordParser.java"
+            ],
+            "submit_final": "After edit_java_file, submit_final with no draft_id scores the latest Java draft; explicit Python draft_id preserves Python scoring."
+          }
+        },
+        {
+          "tool_name": "edit_java_file",
           "arguments": {
-            "draft_id": 1
+            "path": "src/main/java/com/example/migration/MigrationService.java",
+            "content_chars": 1084
           },
+          "reward": 0.03,
+          "done": false,
+          "result": {
+            "ok": true,
+            "path": "src/main/java/com/example/migration/MigrationService.java",
+            "draft_id": 1,
+            "version": 1,
+            "safety_ok": true,
+            "editable_files": [
+              "src/main/java/com/example/migration/MigrationService.java",
+              "src/main/java/com/example/migration/RecordFormatter.java",
+              "src/main/java/com/example/migration/RecordParser.java"
+            ],
+            "submit_final": "submit_final with no draft_id scores the latest Java draft; explicit Python draft_id preserves Python scoring."
+          }
+        },
+        {
+          "tool_name": "run_junit_tests",
+          "arguments": {},
           "reward": 0.05,
           "done": false,
           "result": {
@@ -434,19 +957,18 @@
             "passed": 3,
             "total": 3,
             "pass_rate": 1.0,
-            "syntax_ok": true,
+            "compile_ok": true,
             "safety_ok": true,
-            "interface_ok": true,
             "timed_out": false,
             "error": null,
-            "failures": []
+            "failures": [],
+            "java_final_eligible": true,
+            "submit_final": "submit_final with no draft_id scores the latest Java draft; explicit Python draft_id preserves Python scoring."
           }
         },
         {
           "tool_name": "submit_final",
-          "arguments": {
-            "draft_id": 1
-          },
+          "arguments": {},
           "reward": 1.0,
           "done": true,
           "result": {
@@ -455,18 +977,20 @@
             "episode_done": true,
             "public_score": 1.0,
             "components": {
-              "hidden_correctness": 1.0,
-              "fresh_correctness": 1.0,
-              "interface_contract": 1.0,
-              "type_and_layout_fidelity": 1.0,
+              "java_compile": 1.0,
+              "hidden_junit_pass_rate": 1.0,
+              "fresh_junit_pass_rate": 1.0,
+              "type_and_decimal_fidelity": 1.0,
+              "layout_fidelity": 1.0,
               "anti_hardcoding": 1.0,
               "safety": 1.0
             },
+            "draft_id": 1,
             "hidden_passed": 3,
             "hidden_total": 3,
             "fresh_passed": 6,
             "fresh_total": 6,
-            "notes": "Hidden and fresh case details are not revealed to the agent."
+            "notes": "Java final scoring used hidden and fresh JUnit tests; hidden and fresh case details are not revealed."
           }
         }
       ]
@@ -491,12 +1015,18 @@
         "hidden_tests": 3,
         "input_width": 21,
         "output_width": 9,
-        "max_steps": 12,
+        "max_steps": 24,
         "allowed_tools": [
           "read_cobol_file",
           "read_copybook",
           "parse_copybook_layout",
           "inspect_business_rules",
+          "get_source_to_java_metadata",
+          "generate_java_skeleton",
+          "read_java_file",
+          "edit_java_file",
+          "run_junit_tests",
+          "inspect_test_failure",
           "write_python_solution",
           "run_visible_tests",
           "inspect_diff",
@@ -513,10 +1043,11 @@
         "public_score": 1.0,
         "accepted": true,
         "components": {
-          "hidden_correctness": 1.0,
-          "fresh_correctness": 1.0,
-          "interface_contract": 1.0,
-          "type_and_layout_fidelity": 1.0,
+          "java_compile": 1.0,
+          "hidden_junit_pass_rate": 1.0,
+          "fresh_junit_pass_rate": 1.0,
+          "type_and_decimal_fidelity": 1.0,
+          "layout_fidelity": 1.0,
           "anti_hardcoding": 1.0,
           "safety": 1.0
         },
@@ -632,25 +1163,237 @@
           }
         },
         {
-          "tool_name": "write_python_solution",
-          "arguments": {
-            "code_chars": 623
-          },
+          "tool_name": "get_source_to_java_metadata",
+          "arguments": {},
           "reward": 0.02,
           "done": false,
           "result": {
             "ok": true,
-            "draft_id": 1,
-            "syntax_ok": true,
-            "safety_ok": true,
-            "error": null
+            "package_name": "com.example.migration",
+            "required_class": "MigrationService",
+            "required_method": "public String migrate(String inputRecord)",
+            "allowed_editable_paths": [
+              "src/main/java/com/example/migration/MigrationService.java",
+              "src/main/java/com/example/migration/RecordFormatter.java",
+              "src/main/java/com/example/migration/RecordParser.java"
+            ],
+            "input_width": 21,
+            "output_width": 9,
+            "copybook_field_mappings": [
+              {
+                "name": "CLAIM-ID",
+                "start": 0,
+                "end": 6,
+                "length": 6,
+                "pic": "X(6)",
+                "python_type": "str",
+                "java_type": "String",
+                "parse_hint": "parse by fixed-width substring offsets"
+              },
+              {
+                "name": "AGE",
+                "start": 6,
+                "end": 9,
+                "length": 3,
+                "pic": "9(3)",
+                "python_type": "int",
+                "java_type": "int",
+                "parse_hint": "parse by fixed-width substring offsets"
+              },
+              {
+                "name": "PLAN-CODE",
+                "start": 9,
+                "end": 10,
+                "length": 1,
+                "pic": "X",
+                "python_type": "str",
+                "java_type": "String",
+                "parse_hint": "parse by fixed-width substring offsets"
+              },
+              {
+                "name": "SERVICE-DAYS",
+                "start": 10,
+                "end": 13,
+                "length": 3,
+                "pic": "9(3)",
+                "python_type": "int",
+                "java_type": "int",
+                "parse_hint": "parse by fixed-width substring offsets"
+              },
+              {
+                "name": "PREAUTH-FLAG",
+                "start": 13,
+                "end": 14,
+                "length": 1,
+                "pic": "X",
+                "python_type": "str",
+                "java_type": "String",
+                "parse_hint": "parse by fixed-width substring offsets"
+              },
+              {
+                "name": "CLAIM-AMOUNT",
+                "start": 14,
+                "end": 21,
+                "length": 7,
+                "pic": "9(5)V99",
+                "python_type": "Decimal",
+                "scale": 2,
+                "java_type": "BigDecimal",
+                "parse_hint": "parse as implied decimal with scale 2 using BigDecimal"
+              }
+            ],
+            "output_layout": [
+              {
+                "name": "OUT-CLAIM-ID",
+                "start": 0,
+                "end": 6,
+                "length": 6,
+                "pic": "X(6)",
+                "python_type": "str"
+              },
+              {
+                "name": "OUT-DECISION",
+                "start": 6,
+                "end": 7,
+                "length": 1,
+                "pic": "X",
+                "python_type": "str"
+              },
+              {
+                "name": "OUT-REASON",
+                "start": 7,
+                "end": 9,
+                "length": 2,
+                "pic": "X(2)",
+                "python_type": "str"
+              }
+            ],
+            "java_type_hints": {
+              "copybook_fields": {
+                "CLAIM-ID": {
+                  "java_type": "String",
+                  "pic": "X(6)",
+                  "scale": null
+                },
+                "AGE": {
+                  "java_type": "int",
+                  "pic": "9(3)",
+                  "scale": null
+                },
+                "PLAN-CODE": {
+                  "java_type": "String",
+                  "pic": "X",
+                  "scale": null
+                },
+                "SERVICE-DAYS": {
+                  "java_type": "int",
+                  "pic": "9(3)",
+                  "scale": null
+                },
+                "PREAUTH-FLAG": {
+                  "java_type": "String",
+                  "pic": "X",
+                  "scale": null
+                },
+                "CLAIM-AMOUNT": {
+                  "java_type": "BigDecimal",
+                  "pic": "9(5)V99",
+                  "scale": 2
+                }
+              },
+              "output_fields": {
+                "OUT-CLAIM-ID": {
+                  "java_type": "String",
+                  "pic": "X(6)",
+                  "fixed_width": 6
+                },
+                "OUT-DECISION": {
+                  "java_type": "String",
+                  "pic": "X",
+                  "fixed_width": 1
+                },
+                "OUT-REASON": {
+                  "java_type": "String",
+                  "pic": "X(2)",
+                  "fixed_width": 2
+                }
+              },
+              "money_and_implied_decimals": "Use java.math.BigDecimal and RoundingMode.HALF_UP for PIC fields with implied decimals.",
+              "fixed_width_strings": "Use substring offsets from copybook_field_mappings and pad/truncate output fields exactly."
+            },
+            "fixed_width_contract": {
+              "input_record_name": "CLAIM-RECORD",
+              "output_layout": [
+                {
+                  "name": "OUT-CLAIM-ID",
+                  "start": 0,
+                  "end": 6,
+                  "length": 6,
+                  "pic": "X(6)",
+                  "python_type": "str"
+                },
+                {
+                  "name": "OUT-DECISION",
+                  "start": 6,
+                  "end": 7,
+                  "length": 1,
+                  "pic": "X",
+                  "python_type": "str"
+                },
+                {
+                  "name": "OUT-REASON",
+                  "start": 7,
+                  "end": 9,
+                  "length": 2,
+                  "pic": "X(2)",
+                  "python_type": "str"
+                }
+              ]
+            }
           }
         },
         {
-          "tool_name": "run_visible_tests",
+          "tool_name": "generate_java_skeleton",
+          "arguments": {},
+          "reward": 0.03,
+          "done": false,
+          "result": {
+            "ok": true,
+            "package_name": "com.example.migration",
+            "required_class": "MigrationService",
+            "editable_files": [
+              "src/main/java/com/example/migration/MigrationService.java",
+              "src/main/java/com/example/migration/RecordFormatter.java",
+              "src/main/java/com/example/migration/RecordParser.java"
+            ],
+            "submit_final": "After edit_java_file, submit_final with no draft_id scores the latest Java draft; explicit Python draft_id preserves Python scoring."
+          }
+        },
+        {
+          "tool_name": "edit_java_file",
           "arguments": {
-            "draft_id": 1
+            "path": "src/main/java/com/example/migration/MigrationService.java",
+            "content_chars": 1194
           },
+          "reward": 0.03,
+          "done": false,
+          "result": {
+            "ok": true,
+            "path": "src/main/java/com/example/migration/MigrationService.java",
+            "draft_id": 1,
+            "version": 1,
+            "safety_ok": true,
+            "editable_files": [
+              "src/main/java/com/example/migration/MigrationService.java",
+              "src/main/java/com/example/migration/RecordFormatter.java",
+              "src/main/java/com/example/migration/RecordParser.java"
+            ],
+            "submit_final": "submit_final with no draft_id scores the latest Java draft; explicit Python draft_id preserves Python scoring."
+          }
+        },
+        {
+          "tool_name": "run_junit_tests",
+          "arguments": {},
           "reward": 0.05,
           "done": false,
           "result": {
@@ -659,19 +1402,18 @@
             "passed": 3,
             "total": 3,
             "pass_rate": 1.0,
-            "syntax_ok": true,
+            "compile_ok": true,
             "safety_ok": true,
-            "interface_ok": true,
             "timed_out": false,
             "error": null,
-            "failures": []
+            "failures": [],
+            "java_final_eligible": true,
+            "submit_final": "submit_final with no draft_id scores the latest Java draft; explicit Python draft_id preserves Python scoring."
           }
         },
         {
           "tool_name": "submit_final",
-          "arguments": {
-            "draft_id": 1
-          },
+          "arguments": {},
           "reward": 1.0,
           "done": true,
           "result": {
@@ -680,18 +1422,20 @@
             "episode_done": true,
             "public_score": 1.0,
             "components": {
-              "hidden_correctness": 1.0,
-              "fresh_correctness": 1.0,
-              "interface_contract": 1.0,
-              "type_and_layout_fidelity": 1.0,
+              "java_compile": 1.0,
+              "hidden_junit_pass_rate": 1.0,
+              "fresh_junit_pass_rate": 1.0,
+              "type_and_decimal_fidelity": 1.0,
+              "layout_fidelity": 1.0,
               "anti_hardcoding": 1.0,
               "safety": 1.0
             },
+            "draft_id": 1,
             "hidden_passed": 3,
             "hidden_total": 3,
             "fresh_passed": 6,
             "fresh_total": 6,
-            "notes": "Hidden and fresh case details are not revealed to the agent."
+            "notes": "Java final scoring used hidden and fresh JUnit tests; hidden and fresh case details are not revealed."
           }
         }
       ]
@@ -716,12 +1460,18 @@
         "hidden_tests": 3,
         "input_width": 19,
         "output_width": 9,
-        "max_steps": 12,
+        "max_steps": 24,
         "allowed_tools": [
           "read_cobol_file",
           "read_copybook",
           "parse_copybook_layout",
           "inspect_business_rules",
+          "get_source_to_java_metadata",
+          "generate_java_skeleton",
+          "read_java_file",
+          "edit_java_file",
+          "run_junit_tests",
+          "inspect_test_failure",
           "write_python_solution",
           "run_visible_tests",
           "inspect_diff",
@@ -738,10 +1488,11 @@
         "public_score": 1.0,
         "accepted": true,
         "components": {
-          "hidden_correctness": 1.0,
-          "fresh_correctness": 1.0,
-          "interface_contract": 1.0,
-          "type_and_layout_fidelity": 1.0,
+          "java_compile": 1.0,
+          "hidden_junit_pass_rate": 1.0,
+          "fresh_junit_pass_rate": 1.0,
+          "type_and_decimal_fidelity": 1.0,
+          "layout_fidelity": 1.0,
           "anti_hardcoding": 1.0,
           "safety": 1.0
         },
@@ -846,25 +1597,212 @@
           }
         },
         {
-          "tool_name": "write_python_solution",
-          "arguments": {
-            "code_chars": 607
-          },
+          "tool_name": "get_source_to_java_metadata",
+          "arguments": {},
           "reward": 0.02,
           "done": false,
           "result": {
             "ok": true,
-            "draft_id": 1,
-            "syntax_ok": true,
-            "safety_ok": true,
-            "error": null
+            "package_name": "com.example.migration",
+            "required_class": "MigrationService",
+            "required_method": "public String migrate(String inputRecord)",
+            "allowed_editable_paths": [
+              "src/main/java/com/example/migration/MigrationService.java",
+              "src/main/java/com/example/migration/RecordFormatter.java",
+              "src/main/java/com/example/migration/RecordParser.java"
+            ],
+            "input_width": 19,
+            "output_width": 9,
+            "copybook_field_mappings": [
+              {
+                "name": "ACCOUNT-ID",
+                "start": 0,
+                "end": 6,
+                "length": 6,
+                "pic": "X(6)",
+                "python_type": "str",
+                "java_type": "String",
+                "parse_hint": "parse by fixed-width substring offsets"
+              },
+              {
+                "name": "STATUS-CODE",
+                "start": 6,
+                "end": 7,
+                "length": 1,
+                "pic": "X",
+                "python_type": "str",
+                "level_88": {
+                  "ACTIVE-ACCT": "A",
+                  "FROZEN-ACCT": "F",
+                  "CLOSED-ACCT": "C"
+                },
+                "java_type": "String",
+                "parse_hint": "parse by fixed-width substring offsets"
+              },
+              {
+                "name": "BALANCE",
+                "start": 7,
+                "end": 16,
+                "length": 9,
+                "pic": "S9(6)V99 SIGN LEADING SEPARATE",
+                "python_type": "Decimal",
+                "scale": 2,
+                "java_type": "BigDecimal",
+                "parse_hint": "parse as implied decimal with scale 2 using BigDecimal"
+              },
+              {
+                "name": "DAYS-PAST-DUE",
+                "start": 16,
+                "end": 19,
+                "length": 3,
+                "pic": "9(3)",
+                "python_type": "int",
+                "java_type": "int",
+                "parse_hint": "parse by fixed-width substring offsets"
+              }
+            ],
+            "output_layout": [
+              {
+                "name": "OUT-ACCOUNT-ID",
+                "start": 0,
+                "end": 6,
+                "length": 6,
+                "pic": "X(6)",
+                "python_type": "str"
+              },
+              {
+                "name": "OUT-CATEGORY",
+                "start": 6,
+                "end": 8,
+                "length": 2,
+                "pic": "X(2)",
+                "python_type": "str"
+              },
+              {
+                "name": "OUT-ACTION",
+                "start": 8,
+                "end": 9,
+                "length": 1,
+                "pic": "X",
+                "python_type": "str"
+              }
+            ],
+            "java_type_hints": {
+              "copybook_fields": {
+                "ACCOUNT-ID": {
+                  "java_type": "String",
+                  "pic": "X(6)",
+                  "scale": null
+                },
+                "STATUS-CODE": {
+                  "java_type": "String",
+                  "pic": "X",
+                  "scale": null
+                },
+                "BALANCE": {
+                  "java_type": "BigDecimal",
+                  "pic": "S9(6)V99 SIGN LEADING SEPARATE",
+                  "scale": 2
+                },
+                "DAYS-PAST-DUE": {
+                  "java_type": "int",
+                  "pic": "9(3)",
+                  "scale": null
+                }
+              },
+              "output_fields": {
+                "OUT-ACCOUNT-ID": {
+                  "java_type": "String",
+                  "pic": "X(6)",
+                  "fixed_width": 6
+                },
+                "OUT-CATEGORY": {
+                  "java_type": "String",
+                  "pic": "X(2)",
+                  "fixed_width": 2
+                },
+                "OUT-ACTION": {
+                  "java_type": "String",
+                  "pic": "X",
+                  "fixed_width": 1
+                }
+              },
+              "money_and_implied_decimals": "Use java.math.BigDecimal and RoundingMode.HALF_UP for PIC fields with implied decimals.",
+              "fixed_width_strings": "Use substring offsets from copybook_field_mappings and pad/truncate output fields exactly."
+            },
+            "fixed_width_contract": {
+              "input_record_name": "ACCOUNT-RECORD",
+              "output_layout": [
+                {
+                  "name": "OUT-ACCOUNT-ID",
+                  "start": 0,
+                  "end": 6,
+                  "length": 6,
+                  "pic": "X(6)",
+                  "python_type": "str"
+                },
+                {
+                  "name": "OUT-CATEGORY",
+                  "start": 6,
+                  "end": 8,
+                  "length": 2,
+                  "pic": "X(2)",
+                  "python_type": "str"
+                },
+                {
+                  "name": "OUT-ACTION",
+                  "start": 8,
+                  "end": 9,
+                  "length": 1,
+                  "pic": "X",
+                  "python_type": "str"
+                }
+              ]
+            }
           }
         },
         {
-          "tool_name": "run_visible_tests",
+          "tool_name": "generate_java_skeleton",
+          "arguments": {},
+          "reward": 0.03,
+          "done": false,
+          "result": {
+            "ok": true,
+            "package_name": "com.example.migration",
+            "required_class": "MigrationService",
+            "editable_files": [
+              "src/main/java/com/example/migration/MigrationService.java",
+              "src/main/java/com/example/migration/RecordFormatter.java",
+              "src/main/java/com/example/migration/RecordParser.java"
+            ],
+            "submit_final": "After edit_java_file, submit_final with no draft_id scores the latest Java draft; explicit Python draft_id preserves Python scoring."
+          }
+        },
+        {
+          "tool_name": "edit_java_file",
           "arguments": {
-            "draft_id": 1
+            "path": "src/main/java/com/example/migration/MigrationService.java",
+            "content_chars": 1123
           },
+          "reward": 0.03,
+          "done": false,
+          "result": {
+            "ok": true,
+            "path": "src/main/java/com/example/migration/MigrationService.java",
+            "draft_id": 1,
+            "version": 1,
+            "safety_ok": true,
+            "editable_files": [
+              "src/main/java/com/example/migration/MigrationService.java",
+              "src/main/java/com/example/migration/RecordFormatter.java",
+              "src/main/java/com/example/migration/RecordParser.java"
+            ],
+            "submit_final": "submit_final with no draft_id scores the latest Java draft; explicit Python draft_id preserves Python scoring."
+          }
+        },
+        {
+          "tool_name": "run_junit_tests",
+          "arguments": {},
           "reward": 0.05,
           "done": false,
           "result": {
@@ -873,19 +1811,18 @@
             "passed": 3,
             "total": 3,
             "pass_rate": 1.0,
-            "syntax_ok": true,
+            "compile_ok": true,
             "safety_ok": true,
-            "interface_ok": true,
             "timed_out": false,
             "error": null,
-            "failures": []
+            "failures": [],
+            "java_final_eligible": true,
+            "submit_final": "submit_final with no draft_id scores the latest Java draft; explicit Python draft_id preserves Python scoring."
           }
         },
         {
           "tool_name": "submit_final",
-          "arguments": {
-            "draft_id": 1
-          },
+          "arguments": {},
           "reward": 1.0,
           "done": true,
           "result": {
@@ -894,18 +1831,20 @@
             "episode_done": true,
             "public_score": 1.0,
             "components": {
-              "hidden_correctness": 1.0,
-              "fresh_correctness": 1.0,
-              "interface_contract": 1.0,
-              "type_and_layout_fidelity": 1.0,
+              "java_compile": 1.0,
+              "hidden_junit_pass_rate": 1.0,
+              "fresh_junit_pass_rate": 1.0,
+              "type_and_decimal_fidelity": 1.0,
+              "layout_fidelity": 1.0,
               "anti_hardcoding": 1.0,
               "safety": 1.0
             },
+            "draft_id": 1,
             "hidden_passed": 3,
             "hidden_total": 3,
             "fresh_passed": 6,
             "fresh_total": 6,
-            "notes": "Hidden and fresh case details are not revealed to the agent."
+            "notes": "Java final scoring used hidden and fresh JUnit tests; hidden and fresh case details are not revealed."
           }
         }
       ]
@@ -932,12 +1871,18 @@
         "hidden_tests": 4,
         "input_width": 44,
         "output_width": 18,
-        "max_steps": 12,
+        "max_steps": 24,
         "allowed_tools": [
           "read_cobol_file",
           "read_copybook",
           "parse_copybook_layout",
           "inspect_business_rules",
+          "get_source_to_java_metadata",
+          "generate_java_skeleton",
+          "read_java_file",
+          "edit_java_file",
+          "run_junit_tests",
+          "inspect_test_failure",
           "write_python_solution",
           "run_visible_tests",
           "inspect_diff",
@@ -954,10 +1899,11 @@
         "public_score": 1.0,
         "accepted": true,
         "components": {
-          "hidden_correctness": 1.0,
-          "fresh_correctness": 1.0,
-          "interface_contract": 1.0,
-          "type_and_layout_fidelity": 1.0,
+          "java_compile": 1.0,
+          "hidden_junit_pass_rate": 1.0,
+          "fresh_junit_pass_rate": 1.0,
+          "type_and_decimal_fidelity": 1.0,
+          "layout_fidelity": 1.0,
           "anti_hardcoding": 1.0,
           "safety": 1.0
         },
@@ -1121,25 +2067,214 @@
           }
         },
         {
-          "tool_name": "write_python_solution",
-          "arguments": {
-            "code_chars": 984
-          },
+          "tool_name": "get_source_to_java_metadata",
+          "arguments": {},
           "reward": 0.02,
           "done": false,
           "result": {
             "ok": true,
-            "draft_id": 1,
-            "syntax_ok": true,
-            "safety_ok": true,
-            "error": null
+            "package_name": "com.example.migration",
+            "required_class": "MigrationService",
+            "required_method": "public String migrate(String inputRecord)",
+            "allowed_editable_paths": [
+              "src/main/java/com/example/migration/MigrationService.java",
+              "src/main/java/com/example/migration/RecordFormatter.java",
+              "src/main/java/com/example/migration/RecordParser.java"
+            ],
+            "input_width": 44,
+            "output_width": 18,
+            "copybook_field_mappings": [
+              {
+                "name": "INVOICE-ID",
+                "start": 0,
+                "end": 6,
+                "length": 6,
+                "pic": "X(6)",
+                "python_type": "str",
+                "java_type": "String",
+                "parse_hint": "parse by fixed-width substring offsets"
+              },
+              {
+                "name": "ITEM-COUNT",
+                "start": 6,
+                "end": 8,
+                "length": 2,
+                "pic": "9(2)",
+                "python_type": "int",
+                "java_type": "int",
+                "parse_hint": "parse by fixed-width substring offsets"
+              },
+              {
+                "name": "LINE-ITEMS",
+                "start": 8,
+                "end": 44,
+                "length": 36,
+                "pic": "OCCURS 4 TIMES",
+                "python_type": "group",
+                "occurs": 4,
+                "stride": 9,
+                "java_type": "List or fixed-offset helper",
+                "parse_hint": "parse nested OCCURS/group fields by fixed-width offsets"
+              }
+            ],
+            "output_layout": [
+              {
+                "name": "OUT-INVOICE-ID",
+                "start": 0,
+                "end": 6,
+                "length": 6,
+                "pic": "X(6)",
+                "python_type": "str"
+              },
+              {
+                "name": "OUT-TOTAL",
+                "start": 6,
+                "end": 15,
+                "length": 9,
+                "pic": "9(7)V99",
+                "python_type": "str"
+              },
+              {
+                "name": "OUT-ITEM-COUNT",
+                "start": 15,
+                "end": 17,
+                "length": 2,
+                "pic": "9(2)",
+                "python_type": "str"
+              },
+              {
+                "name": "OUT-FLAG",
+                "start": 17,
+                "end": 18,
+                "length": 1,
+                "pic": "X",
+                "python_type": "str"
+              }
+            ],
+            "java_type_hints": {
+              "copybook_fields": {
+                "INVOICE-ID": {
+                  "java_type": "String",
+                  "pic": "X(6)",
+                  "scale": null
+                },
+                "ITEM-COUNT": {
+                  "java_type": "int",
+                  "pic": "9(2)",
+                  "scale": null
+                },
+                "LINE-ITEMS": {
+                  "java_type": "List or fixed-offset helper",
+                  "pic": "OCCURS 4 TIMES",
+                  "scale": null
+                }
+              },
+              "output_fields": {
+                "OUT-INVOICE-ID": {
+                  "java_type": "String",
+                  "pic": "X(6)",
+                  "fixed_width": 6
+                },
+                "OUT-TOTAL": {
+                  "java_type": "BigDecimal",
+                  "pic": "9(7)V99",
+                  "fixed_width": 9
+                },
+                "OUT-ITEM-COUNT": {
+                  "java_type": "String",
+                  "pic": "9(2)",
+                  "fixed_width": 2
+                },
+                "OUT-FLAG": {
+                  "java_type": "String",
+                  "pic": "X",
+                  "fixed_width": 1
+                }
+              },
+              "money_and_implied_decimals": "Use java.math.BigDecimal and RoundingMode.HALF_UP for PIC fields with implied decimals.",
+              "fixed_width_strings": "Use substring offsets from copybook_field_mappings and pad/truncate output fields exactly."
+            },
+            "fixed_width_contract": {
+              "input_record_name": "INVOICE-RECORD",
+              "output_layout": [
+                {
+                  "name": "OUT-INVOICE-ID",
+                  "start": 0,
+                  "end": 6,
+                  "length": 6,
+                  "pic": "X(6)",
+                  "python_type": "str"
+                },
+                {
+                  "name": "OUT-TOTAL",
+                  "start": 6,
+                  "end": 15,
+                  "length": 9,
+                  "pic": "9(7)V99",
+                  "python_type": "str"
+                },
+                {
+                  "name": "OUT-ITEM-COUNT",
+                  "start": 15,
+                  "end": 17,
+                  "length": 2,
+                  "pic": "9(2)",
+                  "python_type": "str"
+                },
+                {
+                  "name": "OUT-FLAG",
+                  "start": 17,
+                  "end": 18,
+                  "length": 1,
+                  "pic": "X",
+                  "python_type": "str"
+                }
+              ]
+            }
           }
         },
         {
-          "tool_name": "run_visible_tests",
+          "tool_name": "generate_java_skeleton",
+          "arguments": {},
+          "reward": 0.03,
+          "done": false,
+          "result": {
+            "ok": true,
+            "package_name": "com.example.migration",
+            "required_class": "MigrationService",
+            "editable_files": [
+              "src/main/java/com/example/migration/MigrationService.java",
+              "src/main/java/com/example/migration/RecordFormatter.java",
+              "src/main/java/com/example/migration/RecordParser.java"
+            ],
+            "submit_final": "After edit_java_file, submit_final with no draft_id scores the latest Java draft; explicit Python draft_id preserves Python scoring."
+          }
+        },
+        {
+          "tool_name": "edit_java_file",
           "arguments": {
-            "draft_id": 1
+            "path": "src/main/java/com/example/migration/MigrationService.java",
+            "content_chars": 1651
           },
+          "reward": 0.03,
+          "done": false,
+          "result": {
+            "ok": true,
+            "path": "src/main/java/com/example/migration/MigrationService.java",
+            "draft_id": 1,
+            "version": 1,
+            "safety_ok": true,
+            "editable_files": [
+              "src/main/java/com/example/migration/MigrationService.java",
+              "src/main/java/com/example/migration/RecordFormatter.java",
+              "src/main/java/com/example/migration/RecordParser.java"
+            ],
+            "submit_final": "submit_final with no draft_id scores the latest Java draft; explicit Python draft_id preserves Python scoring."
+          }
+        },
+        {
+          "tool_name": "run_junit_tests",
+          "arguments": {},
           "reward": 0.05,
           "done": false,
           "result": {
@@ -1148,19 +2283,18 @@
             "passed": 3,
             "total": 3,
             "pass_rate": 1.0,
-            "syntax_ok": true,
+            "compile_ok": true,
             "safety_ok": true,
-            "interface_ok": true,
             "timed_out": false,
             "error": null,
-            "failures": []
+            "failures": [],
+            "java_final_eligible": true,
+            "submit_final": "submit_final with no draft_id scores the latest Java draft; explicit Python draft_id preserves Python scoring."
           }
         },
         {
           "tool_name": "submit_final",
-          "arguments": {
-            "draft_id": 1
-          },
+          "arguments": {},
           "reward": 1.0,
           "done": true,
           "result": {
@@ -1169,18 +2303,20 @@
             "episode_done": true,
             "public_score": 1.0,
             "components": {
-              "hidden_correctness": 1.0,
-              "fresh_correctness": 1.0,
-              "interface_contract": 1.0,
-              "type_and_layout_fidelity": 1.0,
+              "java_compile": 1.0,
+              "hidden_junit_pass_rate": 1.0,
+              "fresh_junit_pass_rate": 1.0,
+              "type_and_decimal_fidelity": 1.0,
+              "layout_fidelity": 1.0,
               "anti_hardcoding": 1.0,
               "safety": 1.0
             },
+            "draft_id": 1,
             "hidden_passed": 4,
             "hidden_total": 4,
             "fresh_passed": 6,
             "fresh_total": 6,
-            "notes": "Hidden and fresh case details are not revealed to the agent."
+            "notes": "Java final scoring used hidden and fresh JUnit tests; hidden and fresh case details are not revealed."
           }
         }
       ]
@@ -1205,12 +2341,18 @@
         "hidden_tests": 3,
         "input_width": 21,
         "output_width": 22,
-        "max_steps": 12,
+        "max_steps": 24,
         "allowed_tools": [
           "read_cobol_file",
           "read_copybook",
           "parse_copybook_layout",
           "inspect_business_rules",
+          "get_source_to_java_metadata",
+          "generate_java_skeleton",
+          "read_java_file",
+          "edit_java_file",
+          "run_junit_tests",
+          "inspect_test_failure",
           "write_python_solution",
           "run_visible_tests",
           "inspect_diff",
@@ -1227,10 +2369,11 @@
         "public_score": 1.0,
         "accepted": true,
         "components": {
-          "hidden_correctness": 1.0,
-          "fresh_correctness": 1.0,
-          "interface_contract": 1.0,
-          "type_and_layout_fidelity": 1.0,
+          "java_compile": 1.0,
+          "hidden_junit_pass_rate": 1.0,
+          "fresh_junit_pass_rate": 1.0,
+          "type_and_decimal_fidelity": 1.0,
+          "layout_fidelity": 1.0,
           "anti_hardcoding": 1.0,
           "safety": 1.0
         },
@@ -1331,25 +2474,228 @@
           }
         },
         {
-          "tool_name": "write_python_solution",
-          "arguments": {
-            "code_chars": 813
-          },
+          "tool_name": "get_source_to_java_metadata",
+          "arguments": {},
           "reward": 0.02,
           "done": false,
           "result": {
             "ok": true,
-            "draft_id": 1,
-            "syntax_ok": true,
-            "safety_ok": true,
-            "error": null
+            "package_name": "com.example.migration",
+            "required_class": "MigrationService",
+            "required_method": "public String migrate(String inputRecord)",
+            "allowed_editable_paths": [
+              "src/main/java/com/example/migration/MigrationService.java",
+              "src/main/java/com/example/migration/RecordFormatter.java",
+              "src/main/java/com/example/migration/RecordParser.java"
+            ],
+            "input_width": 21,
+            "output_width": 22,
+            "copybook_field_mappings": [
+              {
+                "name": "POLICY-ID",
+                "start": 0,
+                "end": 6,
+                "length": 6,
+                "pic": "X(6)",
+                "python_type": "str",
+                "java_type": "String",
+                "parse_hint": "parse by fixed-width substring offsets"
+              },
+              {
+                "name": "RAW-DATE",
+                "start": 6,
+                "end": 12,
+                "length": 6,
+                "pic": "9(6)",
+                "python_type": "str",
+                "java_type": "String",
+                "parse_hint": "parse by fixed-width substring offsets"
+              },
+              {
+                "name": "WINDOW-YEAR",
+                "start": 12,
+                "end": 14,
+                "length": 2,
+                "pic": "9(2)",
+                "python_type": "int",
+                "java_type": "int",
+                "parse_hint": "parse by fixed-width substring offsets"
+              },
+              {
+                "name": "AMOUNT",
+                "start": 14,
+                "end": 21,
+                "length": 7,
+                "pic": "9(5)V99",
+                "python_type": "Decimal",
+                "scale": 2,
+                "java_type": "BigDecimal",
+                "parse_hint": "parse as implied decimal with scale 2 using BigDecimal"
+              }
+            ],
+            "output_layout": [
+              {
+                "name": "OUT-POLICY-ID",
+                "start": 0,
+                "end": 6,
+                "length": 6,
+                "pic": "X(6)",
+                "python_type": "str"
+              },
+              {
+                "name": "OUT-DATE",
+                "start": 6,
+                "end": 14,
+                "length": 8,
+                "pic": "9(8)",
+                "python_type": "str"
+              },
+              {
+                "name": "OUT-VALID",
+                "start": 14,
+                "end": 15,
+                "length": 1,
+                "pic": "X",
+                "python_type": "str"
+              },
+              {
+                "name": "OUT-AMOUNT",
+                "start": 15,
+                "end": 22,
+                "length": 7,
+                "pic": "9(5)V99",
+                "python_type": "str"
+              }
+            ],
+            "java_type_hints": {
+              "copybook_fields": {
+                "POLICY-ID": {
+                  "java_type": "String",
+                  "pic": "X(6)",
+                  "scale": null
+                },
+                "RAW-DATE": {
+                  "java_type": "String",
+                  "pic": "9(6)",
+                  "scale": null
+                },
+                "WINDOW-YEAR": {
+                  "java_type": "int",
+                  "pic": "9(2)",
+                  "scale": null
+                },
+                "AMOUNT": {
+                  "java_type": "BigDecimal",
+                  "pic": "9(5)V99",
+                  "scale": 2
+                }
+              },
+              "output_fields": {
+                "OUT-POLICY-ID": {
+                  "java_type": "String",
+                  "pic": "X(6)",
+                  "fixed_width": 6
+                },
+                "OUT-DATE": {
+                  "java_type": "String",
+                  "pic": "9(8)",
+                  "fixed_width": 8
+                },
+                "OUT-VALID": {
+                  "java_type": "String",
+                  "pic": "X",
+                  "fixed_width": 1
+                },
+                "OUT-AMOUNT": {
+                  "java_type": "BigDecimal",
+                  "pic": "9(5)V99",
+                  "fixed_width": 7
+                }
+              },
+              "money_and_implied_decimals": "Use java.math.BigDecimal and RoundingMode.HALF_UP for PIC fields with implied decimals.",
+              "fixed_width_strings": "Use substring offsets from copybook_field_mappings and pad/truncate output fields exactly."
+            },
+            "fixed_width_contract": {
+              "input_record_name": "POLICY-DATE-RECORD",
+              "output_layout": [
+                {
+                  "name": "OUT-POLICY-ID",
+                  "start": 0,
+                  "end": 6,
+                  "length": 6,
+                  "pic": "X(6)",
+                  "python_type": "str"
+                },
+                {
+                  "name": "OUT-DATE",
+                  "start": 6,
+                  "end": 14,
+                  "length": 8,
+                  "pic": "9(8)",
+                  "python_type": "str"
+                },
+                {
+                  "name": "OUT-VALID",
+                  "start": 14,
+                  "end": 15,
+                  "length": 1,
+                  "pic": "X",
+                  "python_type": "str"
+                },
+                {
+                  "name": "OUT-AMOUNT",
+                  "start": 15,
+                  "end": 22,
+                  "length": 7,
+                  "pic": "9(5)V99",
+                  "python_type": "str"
+                }
+              ]
+            }
           }
         },
         {
-          "tool_name": "run_visible_tests",
+          "tool_name": "generate_java_skeleton",
+          "arguments": {},
+          "reward": 0.03,
+          "done": false,
+          "result": {
+            "ok": true,
+            "package_name": "com.example.migration",
+            "required_class": "MigrationService",
+            "editable_files": [
+              "src/main/java/com/example/migration/MigrationService.java",
+              "src/main/java/com/example/migration/RecordFormatter.java",
+              "src/main/java/com/example/migration/RecordParser.java"
+            ],
+            "submit_final": "After edit_java_file, submit_final with no draft_id scores the latest Java draft; explicit Python draft_id preserves Python scoring."
+          }
+        },
+        {
+          "tool_name": "edit_java_file",
           "arguments": {
-            "draft_id": 1
+            "path": "src/main/java/com/example/migration/MigrationService.java",
+            "content_chars": 1506
           },
+          "reward": 0.03,
+          "done": false,
+          "result": {
+            "ok": true,
+            "path": "src/main/java/com/example/migration/MigrationService.java",
+            "draft_id": 1,
+            "version": 1,
+            "safety_ok": true,
+            "editable_files": [
+              "src/main/java/com/example/migration/MigrationService.java",
+              "src/main/java/com/example/migration/RecordFormatter.java",
+              "src/main/java/com/example/migration/RecordParser.java"
+            ],
+            "submit_final": "submit_final with no draft_id scores the latest Java draft; explicit Python draft_id preserves Python scoring."
+          }
+        },
+        {
+          "tool_name": "run_junit_tests",
+          "arguments": {},
           "reward": 0.05,
           "done": false,
           "result": {
@@ -1358,19 +2704,18 @@
             "passed": 3,
             "total": 3,
             "pass_rate": 1.0,
-            "syntax_ok": true,
+            "compile_ok": true,
             "safety_ok": true,
-            "interface_ok": true,
             "timed_out": false,
             "error": null,
-            "failures": []
+            "failures": [],
+            "java_final_eligible": true,
+            "submit_final": "submit_final with no draft_id scores the latest Java draft; explicit Python draft_id preserves Python scoring."
           }
         },
         {
           "tool_name": "submit_final",
-          "arguments": {
-            "draft_id": 1
-          },
+          "arguments": {},
           "reward": 1.0,
           "done": true,
           "result": {
@@ -1379,18 +2724,20 @@
             "episode_done": true,
             "public_score": 1.0,
             "components": {
-              "hidden_correctness": 1.0,
-              "fresh_correctness": 1.0,
-              "interface_contract": 1.0,
-              "type_and_layout_fidelity": 1.0,
+              "java_compile": 1.0,
+              "hidden_junit_pass_rate": 1.0,
+              "fresh_junit_pass_rate": 1.0,
+              "type_and_decimal_fidelity": 1.0,
+              "layout_fidelity": 1.0,
               "anti_hardcoding": 1.0,
               "safety": 1.0
             },
+            "draft_id": 1,
             "hidden_passed": 3,
             "hidden_total": 3,
             "fresh_passed": 6,
             "fresh_total": 6,
-            "notes": "Hidden and fresh case details are not revealed to the agent."
+            "notes": "Java final scoring used hidden and fresh JUnit tests; hidden and fresh case details are not revealed."
           }
         }
       ]

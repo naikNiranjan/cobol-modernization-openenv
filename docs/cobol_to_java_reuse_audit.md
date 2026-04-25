@@ -1,12 +1,12 @@
 # COBOL-to-Java Reuse Audit
 
-This audit maps the existing COBOL-to-Python OpenEnv implementation to the new COBOL-to-Java mainframe modernization workbench direction.
+This audit maps the original COBOL-to-Python OpenEnv implementation to the COBOL-to-Java mainframe modernization workbench direction.
 
 The repo already contains a useful OpenEnv foundation. The fastest path is to reuse the server, task-bank, evaluation, inference, and training plumbing while replacing the Python candidate execution path with a Java/Maven/JUnit execution path.
 
-## Current Repo Summary
+## Original Repo Summary
 
-The existing implementation is a working COBOL-to-Python migration environment.
+At the start of this audit, the implementation was a working COBOL-to-Python migration environment. The repo has since been extended so Java is the primary public path, while the Python path remains for compatibility.
 
 Current capabilities:
 
@@ -76,7 +76,7 @@ These are already aligned with the new direction:
 
 ### 1. Python candidate sandbox
 
-Current:
+Legacy Python path:
 
 ```text
 write_python_solution
@@ -85,7 +85,7 @@ submit_final
 legacy_cobol_env/server/sandbox.py
 ```
 
-Target:
+Primary Java path:
 
 ```text
 generate_java_skeleton
@@ -99,13 +99,13 @@ legacy_cobol_env/server/java_runner.py
 
 ### 2. Oracle solution format
 
-Current:
+Legacy Python path:
 
 ```text
 one Python source string per family
 ```
 
-Target:
+Primary Java path:
 
 ```text
 one Java file map per family:
@@ -117,13 +117,11 @@ one Java file map per family:
 
 ### 3. Prompt contract
 
-Current:
+Legacy Python prompt contract:
 
-```json
-{"code": "...python source..."}
-```
+One JSON object containing a Python source string.
 
-Target:
+Primary Java prompt contract:
 
 ```json
 {
@@ -263,18 +261,9 @@ Also cache Maven dependencies by copying a template `pom.xml` and running `mvn t
 
 ## Reward Changes
 
-Current reward:
+Legacy Python reward names have been replaced in the Java path.
 
-```text
-hidden_correctness
-fresh_correctness
-interface_contract
-type_and_layout_fidelity
-anti_hardcoding
-safety
-```
-
-Target reward:
+Primary Java reward:
 
 ```text
 java_compile
