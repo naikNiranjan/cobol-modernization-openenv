@@ -3,10 +3,11 @@ import shutil
 import pytest
 from openenv.core.env_server.mcp_types import CallToolAction, ListToolsAction
 
+from legacy_cobol_env.models import JavaFinalSubmissionResult, JavaRewardComponents
 from legacy_cobol_env.server.java_runner import JavaCaseResult, JavaEvaluationResult
 from legacy_cobol_env.server.legacy_cobol_env_environment import LegacyCobolEnvironment
 from legacy_cobol_env.server.task_bank import all_tasks, generate_fresh_tests
-from legacy_cobol_env.tests.test_java_runner import PAYROLL_SERVICE
+from legacy_cobol_env.tests.test_java_runner import BAD_PAYROLL_SERVICE, PAYROLL_SERVICE
 
 
 GOOD_SOLUTION = r"""
@@ -50,6 +51,29 @@ def call(env: LegacyCobolEnvironment, tool_name: str, **arguments):
 def reset_ticket(env: LegacyCobolEnvironment, **kwargs):
     obs = env.reset(**kwargs)
     return obs.result["ticket"]
+
+
+def java_eval_for(tests, *, pass_all: bool, compile_ok: bool = True, safety_ok: bool = True):
+    results = []
+    for case in tests:
+        results.append(
+            JavaCaseResult(
+                case_id=case.case_id,
+                passed=pass_all,
+                expected=case.expected_output,
+                actual=case.expected_output if pass_all else "X" * len(case.expected_output),
+                error=None if pass_all else "simulated Java mismatch",
+                failure_type=None if pass_all else "test_failure",
+            )
+        )
+    return JavaEvaluationResult(
+        compile_ok=compile_ok,
+        safety_ok=safety_ok,
+        timed_out=False,
+        passed=len(tests) if pass_all else 0,
+        total=len(tests),
+        case_results=results,
+    )
 
 
 def test_lists_workbench_tools():
@@ -222,6 +246,178 @@ def test_visible_junit_run_through_environment_step_when_maven_is_available():
     assert visible["passed"] == visible["total"]
     assert visible["compile_ok"] is True
     assert visible["java_final_eligible"] is True
+
+
+def test_java_final_submit_scores_latest_java_draft_with_aggregate_response(monkeypatch):
+    env = LegacyCobolEnvironment()
+    env.reset(task_id="payroll_net_pay_001")
+
+    def all_pass(files, tests):
+        return java_eval_for(tests, pass_all=True)
+
+    monkeypatch.setattr("legacy_cobol_env.server.legacy_cobol_env_environment.evaluate_java_files", all_pass)
+
+    call(env, "generate_java_skeleton")
+    call(env, "edit_java_file", path="src/main/java/com/example/migration/MigrationService.java", content=PAYROLL_SERVICE)
+    visible = call(env, "run_junit_tests")
+    final = call(env, "submit_final")
+
+    typed_final = JavaFinalSubmissionResult.model_validate(final)
+    typed_components = JavaRewardComponents.model_validate(final["components"])
+    hidden_expected = env._task.hidden_tests[0].expected_output
+    fresh_expected = generate_fresh_tests(env._task)[0].expected_output
+
+    assert visible["passed"] == visible["total"]
+    assert typed_final.accepted is True
+    assert typed_final.public_score == 1.0
+    assert typed_components.java_compile == 1.0
+    assert final["hidden_passed"] == len(env._task.hidden_tests)
+    assert final["fresh_total"] == len(generate_fresh_tests(env._task))
+    assert "case_results" not in final
+    assert "failures" not in final
+    assert hidden_expected not in str(final)
+    assert fresh_expected not in str(final)
+    assert env.state.done is True
+
+
+def test_bad_java_final_submit_gets_lower_score(monkeypatch):
+    env = LegacyCobolEnvironment()
+    env.reset(task_id="payroll_net_pay_001")
+
+    def all_fail(files, tests):
+        return java_eval_for(tests, pass_all=False)
+
+    monkeypatch.setattr("legacy_cobol_env.server.legacy_cobol_env_environment.evaluate_java_files", all_fail)
+
+    call(env, "generate_java_skeleton")
+    call(env, "edit_java_file", path="src/main/java/com/example/migration/MigrationService.java", content=BAD_PAYROLL_SERVICE)
+    final = call(env, "submit_final")
+
+    assert final["accepted"] is False
+    assert final["public_score"] < 0.8
+    assert final["components"]["hidden_junit_pass_rate"] == 0.0
+    assert final["components"]["fresh_junit_pass_rate"] == 0.0
+    assert env.state.done is True
+
+
+def test_explicit_python_draft_id_preserves_python_final_when_java_draft_exists(monkeypatch):
+    env = LegacyCobolEnvironment()
+    env.reset(task_id="payroll_net_pay_001")
+    written = call(env, "write_python_solution", code=GOOD_SOLUTION)
+    call(env, "generate_java_skeleton")
+    call(env, "edit_java_file", path="src/main/java/com/example/migration/MigrationService.java", content=BAD_PAYROLL_SERVICE)
+
+    def should_not_run_java(files, tests):
+        raise AssertionError("explicit Python draft_id should not run Java final scoring")
+
+    monkeypatch.setattr("legacy_cobol_env.server.legacy_cobol_env_environment.evaluate_java_files", should_not_run_java)
+
+    final = call(env, "submit_final", draft_id=written["draft_id"])
+
+    assert final["accepted"] is True
+    assert final["public_score"] == 1.0
+    assert "hidden_correctness" in final["components"]
+    assert "hidden_junit_pass_rate" not in final["components"]
+
+
+def test_java_final_submit_applies_safety_penalty(monkeypatch):
+    env = LegacyCobolEnvironment()
+    env.reset(task_id="payroll_net_pay_001")
+
+    def unsafe_result(files, tests):
+        return java_eval_for(tests, pass_all=False, compile_ok=False, safety_ok=False)
+
+    monkeypatch.setattr("legacy_cobol_env.server.legacy_cobol_env_environment.evaluate_java_files", unsafe_result)
+
+    call(env, "generate_java_skeleton")
+    call(env, "edit_java_file", path="src/main/java/com/example/migration/MigrationService.java", content=BAD_PAYROLL_SERVICE)
+    final = call(env, "submit_final")
+
+    assert final["accepted"] is False
+    assert final["components"]["java_compile"] == 0.0
+    assert final["components"]["safety"] == 0.0
+
+
+def test_java_final_submit_penalizes_visible_hardcoding_and_fresh_failures(monkeypatch):
+    env = LegacyCobolEnvironment()
+    env.reset(task_id="payroll_net_pay_001")
+    visible = env._task.visible_tests[0]
+    hardcoded = f"""
+package com.example.migration;
+
+public final class MigrationService {{
+    public String migrate(String inputRecord) {{
+        return "{visible.expected_output}";
+    }}
+}}
+"""
+
+    def hidden_passes_fresh_fails(files, tests):
+        return java_eval_for(tests, pass_all=tests[0].case_id.startswith("hidden_"))
+
+    monkeypatch.setattr("legacy_cobol_env.server.legacy_cobol_env_environment.evaluate_java_files", hidden_passes_fresh_fails)
+
+    call(env, "generate_java_skeleton")
+    call(env, "edit_java_file", path="src/main/java/com/example/migration/MigrationService.java", content=hardcoded)
+    final = call(env, "submit_final")
+
+    assert final["accepted"] is False
+    assert final["public_score"] < 1.0
+    assert final["components"]["fresh_junit_pass_rate"] == 0.0
+    assert final["components"]["anti_hardcoding"] == 0.0
+
+
+def test_java_reward_components_are_typed_and_clamped(monkeypatch):
+    env = LegacyCobolEnvironment()
+    env.reset(task_id="payroll_net_pay_001")
+
+    def all_pass(files, tests):
+        return java_eval_for(tests, pass_all=True)
+
+    def out_of_bounds_components(hidden, fresh, files):
+        return {
+            "java_compile": 2.0,
+            "hidden_junit_pass_rate": -1.0,
+            "fresh_junit_pass_rate": 1.5,
+            "type_and_decimal_fidelity": -0.5,
+            "layout_fidelity": 9.0,
+            "anti_hardcoding": 0.25,
+            "safety": 3.0,
+        }
+
+    monkeypatch.setattr("legacy_cobol_env.server.legacy_cobol_env_environment.evaluate_java_files", all_pass)
+    monkeypatch.setattr(env, "_java_reward_components", out_of_bounds_components)
+
+    call(env, "generate_java_skeleton")
+    call(env, "edit_java_file", path="src/main/java/com/example/migration/MigrationService.java", content=PAYROLL_SERVICE)
+    final = call(env, "submit_final")
+
+    typed_final = JavaFinalSubmissionResult.model_validate(final)
+    typed_components = JavaRewardComponents.model_validate(final["components"])
+    component_values = typed_components.model_dump().values()
+
+    assert isinstance(typed_final.public_score, float)
+    assert all(0.0 <= value <= 1.0 for value in component_values)
+    assert 0.0 <= typed_final.public_score <= 1.0
+
+
+def test_java_final_submit_with_correct_payroll_when_maven_is_available():
+    if shutil.which("mvn") is None:
+        pytest.skip("Maven is not installed; skipping Maven-dependent Java final test")
+
+    env = LegacyCobolEnvironment()
+    env.reset(task_id="payroll_net_pay_001")
+
+    call(env, "generate_java_skeleton")
+    call(env, "edit_java_file", path="src/main/java/com/example/migration/MigrationService.java", content=PAYROLL_SERVICE)
+    call(env, "run_junit_tests")
+    final = call(env, "submit_final")
+
+    assert final["accepted"] is True
+    assert final["public_score"] >= 0.95
+    assert final["components"]["java_compile"] == 1.0
+    assert final["hidden_passed"] == final["hidden_total"]
+    assert final["fresh_passed"] == final["fresh_total"]
 
 
 def test_good_solution_passes_visible_hidden_and_fresh_tests():

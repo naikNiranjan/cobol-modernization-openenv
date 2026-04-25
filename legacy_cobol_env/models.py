@@ -44,6 +44,34 @@ class FinalSubmissionResult(BaseModel):
     notes: str | None = None
 
 
+class JavaRewardComponents(BaseModel):
+    """Public Java final reward component contract."""
+
+    java_compile: Score = Field(ge=0.0, le=1.0)
+    hidden_junit_pass_rate: Score = Field(ge=0.0, le=1.0)
+    fresh_junit_pass_rate: Score = Field(ge=0.0, le=1.0)
+    type_and_decimal_fidelity: Score = Field(ge=0.0, le=1.0)
+    layout_fidelity: Score = Field(ge=0.0, le=1.0)
+    anti_hardcoding: Score = Field(ge=0.0, le=1.0)
+    safety: Score = Field(ge=0.0, le=1.0)
+
+
+class JavaFinalSubmissionResult(BaseModel):
+    """Structured Java result returned by submit_final."""
+
+    ok: bool
+    accepted: bool
+    episode_done: bool
+    public_score: Score = Field(ge=0.0, le=1.0)
+    components: JavaRewardComponents
+    draft_id: int | None = None
+    hidden_passed: int | None = None
+    hidden_total: int | None = None
+    fresh_passed: int | None = None
+    fresh_total: int | None = None
+    notes: str | None = None
+
+
 class TerminalStepResult(BaseModel):
     """Structured no-op result for blocked episode steps."""
 

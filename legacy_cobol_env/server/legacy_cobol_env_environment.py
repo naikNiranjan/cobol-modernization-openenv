@@ -16,6 +16,8 @@ from openenv.core.env_server.types import Action, Observation
 try:
     from ..models import (
         FinalSubmissionResult,
+        JavaFinalSubmissionResult,
+        JavaRewardComponents,
         LegacyCobolState,
         RewardComponents,
         TerminalStepResult,
@@ -33,6 +35,8 @@ try:
 except ImportError:
     from models import (
         FinalSubmissionResult,
+        JavaFinalSubmissionResult,
+        JavaRewardComponents,
         LegacyCobolState,
         RewardComponents,
         TerminalStepResult,
@@ -384,7 +388,7 @@ class LegacyCobolEnvironment(MCPEnvironment):
             "package_name": "com.example.migration",
             "required_class": "MigrationService",
             "editable_files": sorted(java_files),
-            "submit_final": "Python-only in Phase 2; Java final submission is not implemented yet.",
+            "submit_final": "After edit_java_file, submit_final with no draft_id scores the latest Java draft; explicit Python draft_id preserves Python scoring.",
         }
 
     def _read_java_file(self, path: str) -> dict[str, Any]:
@@ -439,7 +443,7 @@ class LegacyCobolEnvironment(MCPEnvironment):
             "version": draft_id,
             "safety_ok": True,
             "editable_files": sorted(candidate_files),
-            "submit_final": "Python-only in Phase 2; Java final submission is not implemented yet.",
+            "submit_final": "submit_final with no draft_id scores the latest Java draft; explicit Python draft_id preserves Python scoring.",
         }
 
     def _run_junit_tests(self, draft_id: int | None = None) -> dict[str, Any]:
@@ -479,7 +483,7 @@ class LegacyCobolEnvironment(MCPEnvironment):
             "error": result.error,
             "failures": self._java_visible_failures(result),
             "java_final_eligible": self._state.java_final_eligible,
-            "submit_final": "Python-only in Phase 2; Java final submission is not implemented yet.",
+            "submit_final": "submit_final with no draft_id scores the latest Java draft; explicit Python draft_id preserves Python scoring.",
         }
 
     def _inspect_test_failure(self, case_id: str | None = None) -> dict[str, Any]:
@@ -606,14 +610,14 @@ class LegacyCobolEnvironment(MCPEnvironment):
         }
 
     def _submit_final(self, draft_id: int | None = None) -> dict[str, Any]:
+        if draft_id is None and self._state.java_draft_id is not None:
+            return self._submit_java_final()
+        return self._submit_python_final(draft_id=draft_id)
+
+    def _submit_python_final(self, draft_id: int | None = None) -> dict[str, Any]:
         selected_id, code_or_error = self._select_draft(draft_id)
         if selected_id is None:
             self._set_outcome("submit_final", 0.0, "No draft available.", done=True)
-            if self._state.java_skeleton_generated:
-                code_or_error = (
-                    "submit_final is Python-only in Phase 2; Java final submission is not implemented yet. "
-                    "Use run_junit_tests for visible Java validation."
-                )
             return {"ok": False, "accepted": False, "error": code_or_error}
 
         hidden = evaluate_code(code_or_error, self._task.hidden_tests)
@@ -658,6 +662,55 @@ class LegacyCobolEnvironment(MCPEnvironment):
             fresh_passed=fresh.passed,
             fresh_total=fresh.total,
             notes="Hidden and fresh case details are not revealed to the agent.",
+        ).model_dump()
+
+    def _submit_java_final(self) -> dict[str, Any]:
+        selected_id, files_or_error = self._select_java_files(self._state.java_draft_id)
+        if selected_id is None:
+            self._set_outcome("submit_final", 0.0, "No Java draft available.", done=True)
+            return {"ok": False, "accepted": False, "error": files_or_error}
+
+        hidden = evaluate_java_files(files_or_error, self._task.hidden_tests)
+        fresh_tests = generate_fresh_tests(self._task)
+        fresh = evaluate_java_files(files_or_error, fresh_tests)
+
+        components = self._java_reward_components(hidden, fresh, files_or_error)
+        components = JavaRewardComponents.model_validate(
+            {key: self._clamp_score(value) for key, value in components.items()}
+        ).model_dump()
+        final_reward = round(
+            0.12 * components["java_compile"]
+            + 0.45 * components["hidden_junit_pass_rate"]
+            + 0.15 * components["fresh_junit_pass_rate"]
+            + 0.10 * components["type_and_decimal_fidelity"]
+            + 0.08 * components["layout_fidelity"]
+            + 0.05 * components["anti_hardcoding"]
+            + 0.05 * components["safety"],
+            4,
+        )
+        final_reward = self._clamp_score(final_reward)
+
+        self._state.final_score = final_reward
+        self._state.reward_components = components
+        self._state.java_final_eligible = final_reward >= 0.80
+        self._set_outcome(
+            "submit_final",
+            final_reward,
+            f"Java final score {final_reward:.3f}.",
+            done=True,
+        )
+        return JavaFinalSubmissionResult(
+            ok=True,
+            accepted=final_reward >= 0.80,
+            episode_done=True,
+            public_score=final_reward,
+            components=JavaRewardComponents.model_validate(components),
+            draft_id=selected_id,
+            hidden_passed=hidden.passed,
+            hidden_total=hidden.total,
+            fresh_passed=fresh.passed,
+            fresh_total=fresh.total,
+            notes="Java final scoring used hidden and fresh JUnit tests; hidden and fresh case details are not revealed.",
         ).model_dump()
 
     def _select_draft(self, draft_id: int | None) -> tuple[int | None, str]:
@@ -797,6 +850,57 @@ class LegacyCobolEnvironment(MCPEnvironment):
             "anti_hardcoding": round(fresh.pass_rate, 4),
             "safety": safety,
         }
+
+    def _java_reward_components(
+        self,
+        hidden: JavaEvaluationResult,
+        fresh: JavaEvaluationResult,
+        files: dict[str, str],
+    ) -> dict[str, float]:
+        safety = (
+            1.0
+            if hidden.safety_ok
+            and fresh.safety_ok
+            and not hidden.timed_out
+            and not fresh.timed_out
+            else 0.0
+        )
+        layout = (self._layout_pass_rate(hidden) + self._layout_pass_rate(fresh)) / 2
+        return {
+            "java_compile": 1.0 if hidden.compile_ok and fresh.compile_ok else 0.0,
+            "hidden_junit_pass_rate": round(hidden.pass_rate, 4),
+            "fresh_junit_pass_rate": round(fresh.pass_rate, 4),
+            "type_and_decimal_fidelity": self._java_type_and_decimal_fidelity(files),
+            "layout_fidelity": round(layout, 4),
+            "anti_hardcoding": self._java_anti_hardcoding_score(files, fresh),
+            "safety": safety,
+        }
+
+    def _java_type_and_decimal_fidelity(self, files: dict[str, str]) -> float:
+        decimal_fields = [
+            field
+            for field in self._task.metadata["copybook_layout"]
+            if field.get("python_type") == "Decimal" or "V" in field.get("pic", "")
+        ]
+        if not decimal_fields:
+            return 1.0
+
+        source = self._java_source(files)
+        if "BigDecimal" not in source:
+            return 0.0
+
+        rules_text = " ".join(self._task.metadata.get("reference_rules", [])).lower()
+        if "round" in rules_text and "RoundingMode.HALF_UP" not in source:
+            return 0.5
+        return 1.0
+
+    def _java_anti_hardcoding_score(self, files: dict[str, str], fresh: JavaEvaluationResult) -> float:
+        if self._visible_literal_leaks(self._java_source(files)):
+            return 0.0
+        return round(fresh.pass_rate, 4)
+
+    def _java_source(self, files: dict[str, str]) -> str:
+        return "\n".join(files.get(path, "") for path in sorted(files))
 
     def _anti_hardcoding_score(self, code: str, fresh: EvaluationResult) -> float:
         if self._visible_literal_leaks(code):
