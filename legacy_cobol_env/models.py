@@ -1,5 +1,7 @@
 """Shared state models for the Legacy COBOL Migration Workbench."""
 
+from typing import Any
+
 from openenv.core.env_server.mcp_types import CallToolAction, CallToolObservation
 from openenv.core.env_server.types import State
 from pydantic import BaseModel, Field
@@ -73,3 +75,11 @@ class LegacyCobolState(State):
     last_tool: str | None = Field(default=None)
     last_result_summary: str | None = Field(default=None)
     reward_components: dict[str, float] = Field(default_factory=dict)
+    java_skeleton_generated: bool = Field(default=False)
+    java_files: dict[str, str] = Field(default_factory=dict)
+    java_draft_id: int | None = Field(default=None)
+    java_draft_count: int = Field(default=0)
+    java_visible_runs: int = Field(default=0)
+    last_java_visible_result: dict[str, Any] | None = Field(default=None)
+    last_java_failure_diagnostics: list[dict[str, Any]] = Field(default_factory=list)
+    java_final_eligible: bool = Field(default=False)

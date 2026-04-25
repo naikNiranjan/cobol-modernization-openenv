@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict
 from typing import Any
 from uuid import uuid4
 
@@ -19,6 +20,14 @@ try:
         RewardComponents,
         TerminalStepResult,
     )
+    from .java_runner import (
+        ALLOWED_JAVA_PATHS,
+        TEMPLATE_DIR,
+        JavaEvaluationResult,
+        evaluate_java_files,
+        validate_edit_path,
+        validate_java_edits,
+    )
     from .sandbox import EvaluationResult, evaluate_code
     from .task_bank import generate_fresh_tests, load_task
 except ImportError:
@@ -27,6 +36,14 @@ except ImportError:
         LegacyCobolState,
         RewardComponents,
         TerminalStepResult,
+    )
+    from server.java_runner import (
+        ALLOWED_JAVA_PATHS,
+        TEMPLATE_DIR,
+        JavaEvaluationResult,
+        evaluate_java_files,
+        validate_edit_path,
+        validate_java_edits,
     )
     from server.sandbox import EvaluationResult, evaluate_code
     from server.task_bank import generate_fresh_tests, load_task
@@ -44,7 +61,9 @@ class LegacyCobolEnvironment(MCPEnvironment):
         self._task = load_task()
         self._state = LegacyCobolState(episode_id=str(uuid4()))
         self._drafts: dict[int, str] = {}
+        self._java_drafts: dict[int, dict[str, str]] = {}
         self._last_visible_results: dict[str, EvaluationResult] = {}
+        self._last_java_visible_results: dict[str, JavaEvaluationResult] = {}
         self._last_reward = 0.0
         self._last_summary = "Environment initialized."
 
@@ -69,6 +88,36 @@ class LegacyCobolEnvironment(MCPEnvironment):
         def inspect_business_rules() -> dict[str, Any]:
             """Inspect business rules inferred during task authoring."""
             return self._inspect_business_rules()
+
+        @mcp.tool
+        def get_source_to_java_metadata() -> dict[str, Any]:
+            """Return Java interface, file, layout, and type metadata."""
+            return self._get_source_to_java_metadata()
+
+        @mcp.tool
+        def generate_java_skeleton() -> dict[str, Any]:
+            """Initialize editable Java source files from templates."""
+            return self._generate_java_skeleton()
+
+        @mcp.tool
+        def read_java_file(path: str) -> dict[str, Any]:
+            """Read one editable Java source file from the current skeleton."""
+            return self._read_java_file(path)
+
+        @mcp.tool
+        def edit_java_file(path: str, content: str) -> dict[str, Any]:
+            """Edit one allowed Java source file and record a Java draft."""
+            return self._edit_java_file(path, content)
+
+        @mcp.tool
+        def run_junit_tests(draft_id: int | None = None) -> dict[str, Any]:
+            """Run visible JUnit tests for the current or specified Java draft."""
+            return self._run_junit_tests(draft_id=draft_id)
+
+        @mcp.tool
+        def inspect_test_failure(case_id: str | None = None) -> dict[str, Any]:
+            """Inspect the latest failed visible Java test case."""
+            return self._inspect_test_failure(case_id=case_id)
 
         @mcp.tool
         def write_python_solution(code: str) -> dict[str, Any]:
@@ -100,7 +149,9 @@ class LegacyCobolEnvironment(MCPEnvironment):
     ) -> Observation:
         self._task = load_task(seed=seed, task_id=kwargs.get("task_id"))
         self._drafts = {}
+        self._java_drafts = {}
         self._last_visible_results = {}
+        self._last_java_visible_results = {}
         self._last_reward = 0.0
         self._last_summary = "Ready for migration."
         self._state = LegacyCobolState(
@@ -183,6 +234,12 @@ class LegacyCobolEnvironment(MCPEnvironment):
                 "read_copybook",
                 "parse_copybook_layout",
                 "inspect_business_rules",
+                "get_source_to_java_metadata",
+                "generate_java_skeleton",
+                "read_java_file",
+                "edit_java_file",
+                "run_junit_tests",
+                "inspect_test_failure",
                 "write_python_solution",
                 "run_visible_tests",
                 "inspect_diff",
@@ -287,6 +344,179 @@ class LegacyCobolEnvironment(MCPEnvironment):
         self._set_outcome("inspect_business_rules", 0.01, "Inspected business rules.")
         return {"ok": True, "rules": self._task.metadata["business_rules"]}
 
+    def _get_source_to_java_metadata(self) -> dict[str, Any]:
+        self._set_outcome("get_source_to_java_metadata", 0.02, "Returned Java metadata.")
+        return {
+            "ok": True,
+            "package_name": "com.example.migration",
+            "required_class": "MigrationService",
+            "required_method": "public String migrate(String inputRecord)",
+            "allowed_editable_paths": sorted(ALLOWED_JAVA_PATHS),
+            "input_width": self._task.metadata["input_width"],
+            "output_width": self._task.metadata["output_width"],
+            "copybook_field_mappings": self._java_field_mappings(self._task.metadata["copybook_layout"]),
+            "output_layout": self._task.metadata["output_layout"],
+            "java_type_hints": self._java_type_hints(),
+            "fixed_width_contract": {
+                "input_record_name": self._task.metadata["record_name"],
+                "output_layout": self._task.metadata["output_layout"],
+            },
+        }
+
+    def _generate_java_skeleton(self) -> dict[str, Any]:
+        java_files = {
+            path: (TEMPLATE_DIR / path).read_text(encoding="utf-8")
+            for path in sorted(ALLOWED_JAVA_PATHS)
+        }
+        self._state.java_skeleton_generated = True
+        self._state.java_files = java_files
+        self._state.java_draft_id = None
+        self._state.java_draft_count = 0
+        self._state.java_visible_runs = 0
+        self._state.last_java_visible_result = None
+        self._state.last_java_failure_diagnostics = []
+        self._state.java_final_eligible = False
+        self._java_drafts = {}
+        self._last_java_visible_results = {}
+        self._set_outcome("generate_java_skeleton", 0.03, "Generated Java skeleton.")
+        return {
+            "ok": True,
+            "package_name": "com.example.migration",
+            "required_class": "MigrationService",
+            "editable_files": sorted(java_files),
+            "submit_final": "Python-only in Phase 2; Java final submission is not implemented yet.",
+        }
+
+    def _read_java_file(self, path: str) -> dict[str, Any]:
+        if not self._state.java_skeleton_generated:
+            self._set_outcome("read_java_file", 0.0, "Java skeleton has not been generated.")
+            return {"ok": False, "error": "generate_java_skeleton must be called before read_java_file"}
+
+        path_ok, path_error = validate_edit_path(path)
+        if not path_ok:
+            self._set_outcome("read_java_file", 0.0, "Invalid Java file path.")
+            return {"ok": False, "error": path_error}
+
+        content = self._state.java_files.get(path)
+        if content is None:
+            self._set_outcome("read_java_file", 0.0, "Java file is not initialized.")
+            return {"ok": False, "error": f"java file is not initialized: {path}"}
+
+        self._set_outcome("read_java_file", 0.01, f"Read Java file {path}.")
+        return {"ok": True, "path": path, "content": content}
+
+    def _edit_java_file(self, path: str, content: str) -> dict[str, Any]:
+        if not self._state.java_skeleton_generated:
+            self._set_outcome("edit_java_file", 0.0, "Java skeleton has not been generated.")
+            return {"ok": False, "error": "generate_java_skeleton must be called before edit_java_file"}
+
+        path_ok, path_error = validate_edit_path(path)
+        if not path_ok:
+            self._set_outcome("edit_java_file", 0.0, "Invalid Java file path.")
+            return {"ok": False, "error": path_error}
+
+        candidate_files = dict(self._state.java_files)
+        candidate_files[path] = content
+        safety_ok, safety_error = validate_java_edits(candidate_files)
+        if not safety_ok:
+            self._set_outcome("edit_java_file", 0.0, "Java edit failed validation.")
+            return {"ok": False, "path": path, "safety_ok": False, "error": safety_error}
+
+        draft_id = self._state.java_draft_count + 1
+        self._state.java_files = candidate_files
+        self._state.java_draft_id = draft_id
+        self._state.java_draft_count = draft_id
+        self._state.last_java_visible_result = None
+        self._state.last_java_failure_diagnostics = []
+        self._state.java_final_eligible = False
+        self._java_drafts[draft_id] = dict(candidate_files)
+
+        self._set_outcome("edit_java_file", 0.03, f"Stored Java draft {draft_id}.")
+        return {
+            "ok": True,
+            "path": path,
+            "draft_id": draft_id,
+            "version": draft_id,
+            "safety_ok": True,
+            "editable_files": sorted(candidate_files),
+            "submit_final": "Python-only in Phase 2; Java final submission is not implemented yet.",
+        }
+
+    def _run_junit_tests(self, draft_id: int | None = None) -> dict[str, Any]:
+        selected_id, files_or_error = self._select_java_files(draft_id)
+        if selected_id is None:
+            self._set_outcome("run_junit_tests", 0.0, "No Java draft available.")
+            return {"ok": False, "error": files_or_error}
+
+        result = evaluate_java_files(files_or_error, self._task.visible_tests)
+        self._last_java_visible_results[str(selected_id)] = result
+        self._state.java_visible_runs += 1
+        self._state.last_java_visible_result = self._java_result_payload(result)
+        self._state.last_java_failure_diagnostics = self._java_failure_diagnostics(result)
+        self._state.java_final_eligible = (
+            result.safety_ok
+            and result.compile_ok
+            and not result.timed_out
+            and result.total > 0
+            and result.passed == result.total
+        )
+
+        reward = 0.05 * result.pass_rate if result.compile_ok and result.safety_ok else 0.0
+        self._set_outcome(
+            "run_junit_tests",
+            reward,
+            f"Visible JUnit tests: {result.passed}/{result.total}.",
+        )
+        return {
+            "ok": result.safety_ok and result.compile_ok and not result.timed_out,
+            "draft_id": selected_id,
+            "passed": result.passed,
+            "total": result.total,
+            "pass_rate": result.pass_rate,
+            "compile_ok": result.compile_ok,
+            "safety_ok": result.safety_ok,
+            "timed_out": result.timed_out,
+            "error": result.error,
+            "failures": self._java_visible_failures(result),
+            "java_final_eligible": self._state.java_final_eligible,
+            "submit_final": "Python-only in Phase 2; Java final submission is not implemented yet.",
+        }
+
+    def _inspect_test_failure(self, case_id: str | None = None) -> dict[str, Any]:
+        latest = self._latest_java_visible_result()
+        if latest is None:
+            self._set_outcome("inspect_test_failure", 0.0, "No Java visible test run to inspect.")
+            return {"ok": False, "error": "run_junit_tests before inspecting Java test failures"}
+
+        failed_cases = [item for item in latest.case_results if not item.passed]
+        if not failed_cases:
+            diagnostics = self._state.last_java_failure_diagnostics
+            if diagnostics and case_id is None:
+                self._set_outcome("inspect_test_failure", 0.01, "Inspected Java runner failure.")
+                return {"ok": True, "diagnostic": diagnostics[0], "field_diffs": []}
+            self._set_outcome("inspect_test_failure", 0.0, "No failed Java visible case.")
+            return {"ok": False, "error": "no failed visible Java test case is available"}
+
+        case = failed_cases[0] if case_id is None else next((item for item in failed_cases if item.case_id == case_id), None)
+        if case is None:
+            self._set_outcome("inspect_test_failure", 0.0, "Unknown failed Java case.")
+            return {"ok": False, "error": f"unknown failed Java case: {case_id}"}
+
+        field_diffs = self._field_diffs(case)
+        self._set_outcome("inspect_test_failure", 0.02, f"Inspected Java test failure for {case.case_id}.")
+        return {
+            "ok": True,
+            "case_id": case.case_id,
+            "passed": False,
+            "failure_type": case.failure_type,
+            "expected": case.expected,
+            "actual": case.actual,
+            "expected_summary": self._summarize_output(case.expected),
+            "actual_summary": self._summarize_output(case.actual),
+            "error": case.error,
+            "field_diffs": field_diffs,
+        }
+
     def _write_python_solution(self, code: str) -> dict[str, Any]:
         draft_id = len(self._drafts) + 1
         self._drafts[draft_id] = code
@@ -379,6 +609,11 @@ class LegacyCobolEnvironment(MCPEnvironment):
         selected_id, code_or_error = self._select_draft(draft_id)
         if selected_id is None:
             self._set_outcome("submit_final", 0.0, "No draft available.", done=True)
+            if self._state.java_skeleton_generated:
+                code_or_error = (
+                    "submit_final is Python-only in Phase 2; Java final submission is not implemented yet. "
+                    "Use run_junit_tests for visible Java validation."
+                )
             return {"ok": False, "accepted": False, "error": code_or_error}
 
         hidden = evaluate_code(code_or_error, self._task.hidden_tests)
@@ -434,11 +669,36 @@ class LegacyCobolEnvironment(MCPEnvironment):
             return None, f"unknown draft_id: {selected}"
         return selected, code
 
+    def _select_java_files(self, draft_id: int | None) -> tuple[int | None, dict[str, str] | str]:
+        if not self._state.java_skeleton_generated:
+            return None, "generate_java_skeleton must be called before run_junit_tests"
+        if draft_id is not None:
+            files = self._java_drafts.get(draft_id)
+            if files is None:
+                return None, f"unknown Java draft_id: {draft_id}"
+            return draft_id, files
+        if self._state.java_draft_id is not None:
+            files = self._java_drafts.get(self._state.java_draft_id)
+            if files is not None:
+                return self._state.java_draft_id, files
+        return 0, dict(self._state.java_files)
+
     def _latest_visible_result(self) -> EvaluationResult | None:
         if not self._last_visible_results:
             return None
         latest_key = sorted(self._last_visible_results, key=int)[-1]
         return self._last_visible_results[latest_key]
+
+    def _latest_java_visible_result(self) -> JavaEvaluationResult | None:
+        if not self._last_java_visible_results:
+            return None
+        latest_key = sorted(self._last_java_visible_results, key=int)[-1]
+        return self._last_java_visible_results[latest_key]
+
+    def _java_result_payload(self, result: JavaEvaluationResult) -> dict[str, Any]:
+        payload = asdict(result)
+        payload["pass_rate"] = result.pass_rate
+        return payload
 
     def _visible_failures(self, result: EvaluationResult) -> list[dict[str, Any]]:
         failures = []
@@ -455,6 +715,35 @@ class LegacyCobolEnvironment(MCPEnvironment):
                 }
             )
         return failures
+
+    def _java_visible_failures(self, result: JavaEvaluationResult) -> list[dict[str, Any]]:
+        failures = []
+        for item in result.case_results:
+            if item.passed:
+                continue
+            failures.append(
+                {
+                    "case_id": item.case_id,
+                    "failure_type": item.failure_type,
+                    "expected_summary": self._summarize_output(item.expected),
+                    "actual_summary": self._summarize_output(item.actual),
+                    "error": item.error,
+                }
+            )
+        if not failures and result.error:
+            failures.append(
+                {
+                    "case_id": None,
+                    "failure_type": "runner_error",
+                    "expected_summary": "visible JUnit execution",
+                    "actual_summary": result.error,
+                    "error": result.error,
+                }
+            )
+        return failures
+
+    def _java_failure_diagnostics(self, result: JavaEvaluationResult) -> list[dict[str, Any]]:
+        return self._java_visible_failures(result)
 
     def _field_diffs(self, case: Any) -> list[dict[str, Any]]:
         if case.expected is None or case.actual is None:
@@ -569,3 +858,50 @@ class LegacyCobolEnvironment(MCPEnvironment):
             "OUT-PAY-CATEGORY": "H >= 5000.00, M >= 2500.00, otherwise L",
         })
         return hints.get(field_name, "check fixed-width COBOL layout")
+
+    def _java_field_mappings(self, fields: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        mappings = []
+        for item in fields:
+            mapped = dict(item)
+            mapped["java_type"] = self._java_type_for_field(item)
+            if item.get("scale") is not None:
+                mapped["parse_hint"] = f"parse as implied decimal with scale {item['scale']} using BigDecimal"
+            elif item.get("python_type") == "group":
+                mapped["parse_hint"] = "parse nested OCCURS/group fields by fixed-width offsets"
+            else:
+                mapped["parse_hint"] = "parse by fixed-width substring offsets"
+            mappings.append(mapped)
+        return mappings
+
+    def _java_type_hints(self) -> dict[str, Any]:
+        copybook_hints = {
+            item["name"]: {
+                "java_type": self._java_type_for_field(item),
+                "pic": item["pic"],
+                "scale": item.get("scale"),
+            }
+            for item in self._task.metadata["copybook_layout"]
+        }
+        output_hints = {
+            item["name"]: {
+                "java_type": self._java_type_for_field(item),
+                "pic": item["pic"],
+                "fixed_width": item["length"],
+            }
+            for item in self._task.metadata["output_layout"]
+        }
+        return {
+            "copybook_fields": copybook_hints,
+            "output_fields": output_hints,
+            "money_and_implied_decimals": "Use java.math.BigDecimal and RoundingMode.HALF_UP for PIC fields with implied decimals.",
+            "fixed_width_strings": "Use substring offsets from copybook_field_mappings and pad/truncate output fields exactly.",
+        }
+
+    def _java_type_for_field(self, field: dict[str, Any]) -> str:
+        if field.get("python_type") == "Decimal" or "V" in field.get("pic", ""):
+            return "BigDecimal"
+        if field.get("python_type") == "int":
+            return "int"
+        if field.get("python_type") == "group":
+            return "List or fixed-offset helper"
+        return "String"

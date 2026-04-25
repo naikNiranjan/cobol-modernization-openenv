@@ -1,7 +1,12 @@
+import shutil
+
+import pytest
 from openenv.core.env_server.mcp_types import CallToolAction, ListToolsAction
 
+from legacy_cobol_env.server.java_runner import JavaCaseResult, JavaEvaluationResult
 from legacy_cobol_env.server.legacy_cobol_env_environment import LegacyCobolEnvironment
 from legacy_cobol_env.server.task_bank import all_tasks, generate_fresh_tests
+from legacy_cobol_env.tests.test_java_runner import PAYROLL_SERVICE
 
 
 GOOD_SOLUTION = r"""
@@ -55,8 +60,168 @@ def test_lists_workbench_tools():
     names = {tool.name for tool in obs.tools}
 
     assert "read_cobol_file" in names
+    assert "get_source_to_java_metadata" in names
+    assert "generate_java_skeleton" in names
+    assert "read_java_file" in names
+    assert "edit_java_file" in names
+    assert "run_junit_tests" in names
+    assert "inspect_test_failure" in names
     assert "submit_final" in names
     assert "reset" not in names
+
+
+def test_java_metadata_tool_returns_interface_and_field_mappings():
+    env = LegacyCobolEnvironment()
+    env.reset(task_id="payroll_net_pay_001")
+
+    metadata = call(env, "get_source_to_java_metadata")
+
+    assert metadata["package_name"] == "com.example.migration"
+    assert metadata["required_class"] == "MigrationService"
+    assert metadata["required_method"] == "public String migrate(String inputRecord)"
+    assert "src/main/java/com/example/migration/MigrationService.java" in metadata["allowed_editable_paths"]
+    assert metadata["input_width"] == 42
+    assert metadata["output_width"] == 28
+    assert any(field["name"] == "GROSS-PAY" and field["java_type"] == "BigDecimal" for field in metadata["copybook_field_mappings"])
+    assert metadata["java_type_hints"]["copybook_fields"]["DEDUCTIONS"]["java_type"] == "BigDecimal"
+    assert metadata["output_layout"][0]["name"] == "OUT-EMP-ID"
+
+
+def test_java_skeleton_generation_read_and_edit_through_environment_step():
+    env = LegacyCobolEnvironment()
+    env.reset(task_id="payroll_net_pay_001")
+
+    skeleton = call(env, "generate_java_skeleton")
+    read = call(env, "read_java_file", path="src/main/java/com/example/migration/MigrationService.java")
+    edited = call(
+        env,
+        "edit_java_file",
+        path="src/main/java/com/example/migration/MigrationService.java",
+        content=PAYROLL_SERVICE,
+    )
+
+    assert skeleton["ok"] is True
+    assert env.state.java_skeleton_generated is True
+    assert "public final class MigrationService" in read["content"]
+    assert edited["ok"] is True
+    assert edited["draft_id"] == 1
+    assert env.state.java_draft_id == 1
+    assert env.state.java_draft_count == 1
+    assert env.state.java_files["src/main/java/com/example/migration/MigrationService.java"] == PAYROLL_SERVICE
+
+
+def test_java_edit_rejects_path_traversal():
+    env = LegacyCobolEnvironment()
+    env.reset(task_id="payroll_net_pay_001")
+
+    call(env, "generate_java_skeleton")
+    edited = call(env, "edit_java_file", path="../MigrationService.java", content=PAYROLL_SERVICE)
+
+    assert edited["ok"] is False
+    assert "path traversal" in edited["error"]
+    assert env.state.java_draft_count == 0
+
+
+def test_java_tools_reject_bad_ordering_cleanly():
+    env = LegacyCobolEnvironment()
+    env.reset(task_id="payroll_net_pay_001")
+
+    read = call(env, "read_java_file", path="src/main/java/com/example/migration/MigrationService.java")
+    visible = call(env, "run_junit_tests")
+
+    assert read["ok"] is False
+    assert "generate_java_skeleton" in read["error"]
+    assert visible["ok"] is False
+    assert "generate_java_skeleton" in visible["error"]
+
+
+def test_run_junit_tests_missing_maven_returns_structured_failure(monkeypatch):
+    env = LegacyCobolEnvironment()
+    env.reset(task_id="payroll_net_pay_001")
+    call(env, "generate_java_skeleton")
+
+    def missing_maven(files, tests):
+        return JavaEvaluationResult(
+            compile_ok=False,
+            safety_ok=True,
+            timed_out=False,
+            passed=0,
+            total=len(tests),
+            error="maven executable not found; install Maven to run Java tests",
+        )
+
+    monkeypatch.setattr("legacy_cobol_env.server.legacy_cobol_env_environment.evaluate_java_files", missing_maven)
+
+    result = call(env, "run_junit_tests")
+
+    assert result["ok"] is False
+    assert result["compile_ok"] is False
+    assert result["safety_ok"] is True
+    assert "maven executable not found" in result["error"]
+    assert env.state.last_java_visible_result["error"] == result["error"]
+    assert env.state.last_java_failure_diagnostics[0]["failure_type"] == "runner_error"
+
+
+def test_inspect_test_failure_returns_details_after_failed_java_visible_run(monkeypatch):
+    env = LegacyCobolEnvironment()
+    env.reset(task_id="payroll_net_pay_001")
+    call(env, "generate_java_skeleton")
+    case = env._task.visible_tests[0]
+
+    def failed_visible(files, tests):
+        return JavaEvaluationResult(
+            compile_ok=True,
+            safety_ok=True,
+            timed_out=False,
+            passed=0,
+            total=len(tests),
+            case_results=[
+                JavaCaseResult(
+                    case_id=case.case_id,
+                    passed=False,
+                    expected=case.expected_output,
+                    actual=case.input_record,
+                    error="case_id=visible_1 expected output mismatch",
+                    failure_type="test_failure",
+                )
+            ],
+        )
+
+    monkeypatch.setattr("legacy_cobol_env.server.legacy_cobol_env_environment.evaluate_java_files", failed_visible)
+
+    visible = call(env, "run_junit_tests")
+    failure = call(env, "inspect_test_failure")
+
+    assert visible["ok"] is True
+    assert visible["passed"] == 0
+    assert failure["ok"] is True
+    assert failure["case_id"] == case.case_id
+    assert failure["failure_type"] == "test_failure"
+    assert failure["expected"] == case.expected_output
+    assert failure["actual"] == case.input_record
+    assert failure["field_diffs"]
+
+
+def test_visible_junit_run_through_environment_step_when_maven_is_available():
+    if shutil.which("mvn") is None:
+        pytest.skip("Maven is not installed; skipping Maven-dependent Java environment test")
+
+    env = LegacyCobolEnvironment()
+    env.reset(task_id="payroll_net_pay_001")
+
+    call(env, "generate_java_skeleton")
+    edited = call(
+        env,
+        "edit_java_file",
+        path="src/main/java/com/example/migration/MigrationService.java",
+        content=PAYROLL_SERVICE,
+    )
+    visible = call(env, "run_junit_tests", draft_id=edited["draft_id"])
+
+    assert visible["ok"] is True
+    assert visible["passed"] == visible["total"]
+    assert visible["compile_ok"] is True
+    assert visible["java_final_eligible"] is True
 
 
 def test_good_solution_passes_visible_hidden_and_fresh_tests():

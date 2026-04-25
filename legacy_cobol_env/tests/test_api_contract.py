@@ -163,5 +163,13 @@ def test_schema_exposes_project_typed_state_fields():
         "visible_runs",
         "final_score",
         "reward_components",
+        "java_skeleton_generated",
+        "java_files",
+        "java_draft_id",
+        "java_draft_count",
+        "java_visible_runs",
+        "last_java_visible_result",
+        "last_java_failure_diagnostics",
+        "java_final_eligible",
     ]:
         assert field_name in state_properties
