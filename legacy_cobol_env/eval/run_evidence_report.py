@@ -18,8 +18,8 @@ def main() -> None:
     baseline = load_json(OUTPUT_DIR / "baseline_results.json")
     evidence_notes = []
     oracle_model = _load_current_rollout(OUTPUT_DIR / "oracle_model_rollouts.json", evidence_notes)
-    zeroshot = _load_current_rollout(OUTPUT_DIR / "azure_gpt54mini_zeroshot_rollouts.json", evidence_notes)
-    repair = _load_current_rollout(OUTPUT_DIR / "azure_gpt54mini_repair1_rollouts.json", evidence_notes)
+    zeroshot = _load_current_rollout(OUTPUT_DIR / "azure_java_zeroshot_rollouts.json", evidence_notes)
+    repair = _load_current_rollout(OUTPUT_DIR / "azure_java_repair1_rollouts.json", evidence_notes)
     summary = build_score_summary(
         baseline,
         zeroshot=zeroshot,

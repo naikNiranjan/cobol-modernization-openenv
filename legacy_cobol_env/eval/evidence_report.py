@@ -32,13 +32,13 @@ def build_score_summary(
             "task_count": oracle_model["task_count"],
         }
     if zeroshot is not None:
-        policies["gpt-5.4-mini zero-shot"] = {
+        policies["Azure Java zero-shot"] = {
             "mean_public_score": zeroshot["mean_public_score"],
             "accepted_count": zeroshot["accepted_count"],
             "task_count": zeroshot["task_count"],
         }
     if repair is not None:
-        policies["gpt-5.4-mini + repair1"] = {
+        policies["Azure Java repair-1"] = {
             "mean_public_score": repair["mean_public_score"],
             "accepted_count": repair["accepted_count"],
             "task_count": repair["task_count"],
@@ -51,6 +51,7 @@ def build_score_summary(
     if zeroshot is not None:
         for trajectory in zeroshot["trajectories"]:
             task_scores.setdefault(trajectory["task_id"], {})["zeroshot"] = trajectory["final"]["public_score"]
+            task_scores[trajectory["task_id"]]["zeroshot_accepted"] = trajectory["final"]["accepted"]
     if repair is not None:
         for trajectory in repair["trajectories"]:
             task_scores.setdefault(trajectory["task_id"], {})["repair1"] = trajectory["final"]["public_score"]
@@ -58,16 +59,30 @@ def build_score_summary(
 
     training_targets = []
     if repair is not None:
+        zeroshot_by_task = {
+            trajectory["task_id"]: trajectory["final"]
+            for trajectory in (zeroshot or {}).get("trajectories", [])
+        }
         for trajectory in repair["trajectories"]:
             final = trajectory["final"]
             visible = trajectory["visible"]
+            zeroshot_final = zeroshot_by_task.get(trajectory["task_id"], {})
+            zeroshot_score = zeroshot_final.get("public_score")
+            repair_score = final["public_score"]
+            reason = None
             if visible["pass_rate"] == 1.0 and not final["accepted"]:
+                reason = "visible-pass-hidden-fresh-gap"
+            elif isinstance(zeroshot_score, int | float) and repair_score > zeroshot_score and not final["accepted"]:
+                reason = "repair-improved-but-unsolved"
+            if reason is not None:
                 training_targets.append(
                     {
                         "task_id": trajectory["task_id"],
                         "family_id": trajectory.get("family_id"),
-                        "reason": "visible-pass-hidden-fresh-gap",
-                        "public_score": final["public_score"],
+                        "reason": reason,
+                        "zeroshot_public_score": zeroshot_score,
+                        "repair_public_score": repair_score,
+                        "visible_pass_rate": visible["pass_rate"],
                         "weak_components": {
                             key: value
                             for key, value in final["components"].items()

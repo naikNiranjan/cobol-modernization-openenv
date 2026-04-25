@@ -218,6 +218,21 @@ Current regenerated Java evidence:
 | deterministic identity | 0.1500 | 0 / 6 |
 | deterministic blank width | 0.1767 | 0 / 6 |
 | `oracle-model` plumbing check | 1.0000 | 6 / 6 |
+| Azure Java zero-shot | 0.7833333333333333 | 4 / 6 |
+| Azure Java repair-1 | 0.9270833333333334 | 5 / 6 |
+
+Task-level Azure Java comparison:
+
+| Task | Zero-shot | Repair-1 |
+| --- | --- | --- |
+| `payroll_net_pay_001` | 1.0 accepted | 1.0 accepted |
+| `customer_format_001` | 0.5 failed | 1.0 accepted |
+| `claims_eligibility_001` | 1.0 accepted | 1.0 accepted |
+| `account_status_001` | 1.0 accepted | 1.0 accepted |
+| `invoice_occurs_001` | 0.35 failed | 0.5625 failed |
+| `date_normalization_001` | 0.85 accepted | 1.0 accepted |
+
+`invoice_occurs_001` remains unsolved after one repair loop. It is the best target for SFT/RL because visible feedback improved the public score from `0.35` to `0.5625`, but hidden/fresh generalization remains incomplete: the repair-1 final components report `hidden_junit_pass_rate=0.25`, `fresh_junit_pass_rate=0.5`, and `anti_hardcoding=0.5`.
 
 Latest Azure ML validation:
 
@@ -230,12 +245,12 @@ Latest Azure ML validation:
 | `legacy_cobol_env/tests/test_environment.py` | 24 passed |
 | `legacy_cobol_env/tests/test_api_contract.py` | 6 passed |
 
-The previous Azure `gpt-5.4-mini` artifacts are kept for comparison, but `run_evidence_report` skips them because they were produced before the invoice task was hardened into a multi-file tax-code task. Rerun live Azure rollouts after local gates pass.
+`run_evidence_report` uses the committed Azure Java rollout artifacts generated after the invoice task hardening.
 
-Historical Azure artifacts:
+Azure Java artifacts:
 
-- `outputs/evals/azure_gpt54mini_zeroshot_rollouts.json`
-- `outputs/evals/azure_gpt54mini_repair1_rollouts.json`
+- `outputs/evals/azure_java_zeroshot_rollouts.json`
+- `outputs/evals/azure_java_repair1_rollouts.json`
 
 Generate the submission evidence summary and score plot:
 
@@ -316,8 +331,8 @@ Implemented:
 
 Next:
 
-- Rerun Azure `gpt-5.4-mini` zero-shot and repair baselines against the hardened invoice task
-- Update SFT/training data to Java file-edit examples before GPU training
+- Build Java SFT/RL training around `invoice_occurs_001`
+- Evaluate before/after improvement on the committed Azure Java baselines
 - Push to Hugging Face Spaces with `openenv push`
 
 ## Safety Note

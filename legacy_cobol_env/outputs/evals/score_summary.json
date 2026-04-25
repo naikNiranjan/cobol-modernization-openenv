@@ -14,31 +14,76 @@
       "mean_public_score": 1.0,
       "accepted_count": 6,
       "task_count": 6
+    },
+    "Azure Java zero-shot": {
+      "mean_public_score": 0.7833333333333333,
+      "accepted_count": 4,
+      "task_count": 6
+    },
+    "Azure Java repair-1": {
+      "mean_public_score": 0.9270833333333334,
+      "accepted_count": 5,
+      "task_count": 6
     }
   },
   "task_scores": {
     "payroll_net_pay_001": {
-      "oracle_model": 1.0
+      "oracle_model": 1.0,
+      "zeroshot": 1.0,
+      "zeroshot_accepted": true,
+      "repair1": 1.0,
+      "repair1_accepted": true
     },
     "customer_format_001": {
-      "oracle_model": 1.0
+      "oracle_model": 1.0,
+      "zeroshot": 0.5,
+      "zeroshot_accepted": false,
+      "repair1": 1.0,
+      "repair1_accepted": true
     },
     "claims_eligibility_001": {
-      "oracle_model": 1.0
+      "oracle_model": 1.0,
+      "zeroshot": 1.0,
+      "zeroshot_accepted": true,
+      "repair1": 1.0,
+      "repair1_accepted": true
     },
     "account_status_001": {
-      "oracle_model": 1.0
+      "oracle_model": 1.0,
+      "zeroshot": 1.0,
+      "zeroshot_accepted": true,
+      "repair1": 1.0,
+      "repair1_accepted": true
     },
     "invoice_occurs_001": {
-      "oracle_model": 1.0
+      "oracle_model": 1.0,
+      "zeroshot": 0.35,
+      "zeroshot_accepted": false,
+      "repair1": 0.5625,
+      "repair1_accepted": false
     },
     "date_normalization_001": {
-      "oracle_model": 1.0
+      "oracle_model": 1.0,
+      "zeroshot": 0.85,
+      "zeroshot_accepted": true,
+      "repair1": 1.0,
+      "repair1_accepted": true
     }
   },
-  "training_targets": [],
-  "evidence_notes": [
-    "stale rollout artifact skipped after task hardening: azure_gpt54mini_zeroshot_rollouts.json",
-    "stale rollout artifact skipped after task hardening: azure_gpt54mini_repair1_rollouts.json"
-  ]
+  "training_targets": [
+    {
+      "task_id": "invoice_occurs_001",
+      "family_id": "invoice_occurs_totals",
+      "reason": "repair-improved-but-unsolved",
+      "zeroshot_public_score": 0.35,
+      "repair_public_score": 0.5625,
+      "visible_pass_rate": 0.6666666666666666,
+      "weak_components": {
+        "hidden_junit_pass_rate": 0.25,
+        "fresh_junit_pass_rate": 0.5,
+        "anti_hardcoding": 0.5
+      }
+    }
+  ],
+  "evidence_notes": []
 }

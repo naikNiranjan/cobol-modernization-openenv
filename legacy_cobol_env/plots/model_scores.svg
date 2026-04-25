@@ -15,4 +15,14 @@
 <text x="312" y="40.0" font-family="Arial" font-size="12">1.000</text>
 <text x="304" y="292" font-family="Arial" font-size="10">6/6 accepted</text>
 <text x="304" y="306" font-family="Arial" font-size="10">oracle-model</text>
+<rect x="422" y="96.5" width="86" height="175.5" rx="4" fill="#f97316"/>
+<text x="430" y="88.5" font-family="Arial" font-size="12">0.783</text>
+<text x="422" y="292" font-family="Arial" font-size="10">4/6 accepted</text>
+<text x="422" y="306" font-family="Arial" font-size="10">Azure Java</text>
+<text x="422" y="317" font-family="Arial" font-size="10">zero-shot</text>
+<rect x="540" y="64.3" width="86" height="207.7" rx="4" fill="#64748b"/>
+<text x="548" y="56.3" font-family="Arial" font-size="12">0.927</text>
+<text x="540" y="292" font-family="Arial" font-size="10">5/6 accepted</text>
+<text x="540" y="306" font-family="Arial" font-size="10">Azure Java</text>
+<text x="540" y="317" font-family="Arial" font-size="10">repair-1</text>
 </svg>

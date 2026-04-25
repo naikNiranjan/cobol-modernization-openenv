@@ -63,6 +63,28 @@ PYTHONPATH=. python -m legacy_cobol_env.eval.run_model_rollouts \
 
 Current regenerated oracle artifacts score `1.0000` mean public reward with `6 / 6` accepted tasks.
 
+Current Azure Java model evidence:
+
+| Policy | Mean public score | Accepted tasks |
+| --- | ---: | ---: |
+| zero-shot | 0.7833333333333333 | 4 / 6 |
+| repair-1 | 0.9270833333333334 | 5 / 6 |
+
+Artifacts: `legacy_cobol_env/outputs/evals/azure_java_zeroshot_rollouts.json` and `legacy_cobol_env/outputs/evals/azure_java_repair1_rollouts.json`.
+
+Task-level Azure Java comparison:
+
+| Task | Zero-shot | Repair-1 |
+| --- | --- | --- |
+| `payroll_net_pay_001` | 1.0 accepted | 1.0 accepted |
+| `customer_format_001` | 0.5 failed | 1.0 accepted |
+| `claims_eligibility_001` | 1.0 accepted | 1.0 accepted |
+| `account_status_001` | 1.0 accepted | 1.0 accepted |
+| `invoice_occurs_001` | 0.35 failed | 0.5625 failed |
+| `date_normalization_001` | 0.85 accepted | 1.0 accepted |
+
+`invoice_occurs_001` remains unsolved after one repair loop. It is the best target for SFT/RL because visible feedback improved the public score from `0.35` to `0.5625` but did not solve hidden/fresh generalization.
+
 Run the compiler-backed invoice authenticity check:
 
 ```bash
