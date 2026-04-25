@@ -93,17 +93,31 @@ python -m venv .venv-gpu
 . .venv-gpu/bin/activate
 pip install -r legacy_cobol_env/training/requirements-gpu.txt
 pip install -e legacy_cobol_env
+PYTHONPATH=. python -m legacy_cobol_env.training.build_java_sft_dataset
 PYTHONPATH=. python -m legacy_cobol_env.training.train_sft --dry-run
 PYTHONPATH=. python -m legacy_cobol_env.training.train_sft
 ```
 
-The default model is `Qwen/Qwen2.5-Coder-7B-Instruct`, chosen as a conservative
-first GPU target. Override it with `--model-name` for a larger code model.
+`train_sft` now defaults to the Java dataset
+`legacy_cobol_env/outputs/training/java_oracle_sft.jsonl` and output directory
+`legacy_cobol_env/outputs/training/java-sft-qwen-coder-7b`. The default model is
+`Qwen/Qwen2.5-Coder-7B-Instruct`, chosen as a conservative first GPU target.
+Override it with `--model-name` for a larger code model.
+
+To dry-run the legacy Python dataset instead, pass the dataset and output
+directory explicitly:
+
+```bash
+PYTHONPATH=. python -m legacy_cobol_env.training.train_sft \
+  --dataset legacy_cobol_env/outputs/training/oracle_sft.jsonl \
+  --output-dir legacy_cobol_env/outputs/training/legacy-python-sft-qwen-coder-7b \
+  --dry-run
+```
 
 Evaluate the trained checkpoint:
 
 ```bash
-LOCAL_MODEL_PATH=legacy_cobol_env/outputs/training/sft-qwen-coder-7b \
+LOCAL_MODEL_PATH=legacy_cobol_env/outputs/training/java-sft-qwen-coder-7b \
 PYTHONPATH=. python -m legacy_cobol_env.eval.run_model_rollouts \
   --provider local-transformers \
   --task-id invoice_occurs_001 \

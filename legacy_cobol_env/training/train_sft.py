@@ -15,8 +15,8 @@ from typing import Any
 
 
 DEFAULT_MODEL = "Qwen/Qwen2.5-Coder-7B-Instruct"
-DEFAULT_DATASET = "legacy_cobol_env/outputs/training/oracle_sft.jsonl"
-DEFAULT_OUTPUT_DIR = "legacy_cobol_env/outputs/training/sft-qwen-coder-7b"
+DEFAULT_DATASET = "legacy_cobol_env/outputs/training/java_oracle_sft.jsonl"
+DEFAULT_OUTPUT_DIR = "legacy_cobol_env/outputs/training/java-sft-qwen-coder-7b"
 
 
 @dataclass(frozen=True)
@@ -45,6 +45,9 @@ def load_jsonl_rows(path: Path) -> list[dict[str, Any]]:
         messages = row.get("messages")
         if not isinstance(messages, list) or len(messages) < 2:
             raise ValueError(f"{path}:{line_number} missing chat-style messages")
+        for message_index, message in enumerate(messages, start=1):
+            if not isinstance(message, dict) or not isinstance(message.get("role"), str) or not isinstance(message.get("content"), str):
+                raise ValueError(f"{path}:{line_number} invalid message at index {message_index}")
         rows.append(row)
     if not rows:
         raise ValueError(f"{path} has no training rows")
@@ -54,13 +57,41 @@ def load_jsonl_rows(path: Path) -> list[dict[str, Any]]:
 def build_sft_plan(args: SFTArgs) -> dict[str, Any]:
     rows = load_jsonl_rows(Path(args.dataset))
     families = sorted({row.get("family_id", "unknown") for row in rows})
+    task_ids = [str(row.get("task_id", "unknown")) for row in rows]
+    completion_schemas = sorted({_completion_schema(row) for row in rows})
+    primary_training_targets = sorted(
+        str(row["task_id"])
+        for row in rows
+        if row.get("primary_training_target") and row.get("task_id")
+    )
     return {
         **asdict(args),
         "dataset_examples": len(rows),
         "families": families,
+        "task_ids": task_ids,
+        "completion_schemas": completion_schemas,
+        "primary_training_targets": primary_training_targets,
         "uses_lora": args.lora_rank > 0,
         "training_dependencies": ["torch", "transformers", "datasets", "peft", "trl", "accelerate"],
     }
+
+
+def _completion_schema(row: dict[str, Any]) -> str:
+    completion = row.get("completion")
+    if not isinstance(completion, str):
+        messages = row.get("messages") or []
+        completion = messages[-1].get("content") if messages and isinstance(messages[-1], dict) else None
+    if not isinstance(completion, str):
+        return "unknown"
+    try:
+        parsed = json.loads(completion)
+    except json.JSONDecodeError:
+        return "text"
+    if isinstance(parsed, dict) and isinstance(parsed.get("files"), dict):
+        return "java_files"
+    if isinstance(parsed, dict) and isinstance(parsed.get("code"), str):
+        return "python_code"
+    return "json"
 
 
 def write_dry_run_artifacts(plan: dict[str, Any], output_root: Path) -> dict[str, Path]:
