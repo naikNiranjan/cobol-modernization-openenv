@@ -5,6 +5,34 @@ not require GPU access.
 
 ## Current Warm-Start Data
 
+Generate Java oracle SFT examples:
+
+```bash
+PYTHONPATH=. python -m legacy_cobol_env.training.build_java_sft_dataset
+```
+
+Artifact:
+
+- `outputs/training/java_oracle_sft.jsonl`
+
+Java SFT is the current training starting point. Each row uses the active Java
+file-edit completion schema:
+
+```json
+{
+  "files": {
+    "src/main/java/com/example/migration/MigrationService.java": "...java source..."
+  }
+}
+```
+
+The dataset includes all six task families and marks `invoice_occurs_001` as
+the primary training target because it remains unsolved after Azure Java
+repair-1: zero-shot scored `0.35`, repair-1 improved to `0.5625`, and the task
+still failed hidden/fresh generalization.
+
+## Legacy Python Warm-Start Data
+
 Generate oracle SFT examples:
 
 ```bash
@@ -14,6 +42,10 @@ PYTHONPATH=. .venv/bin/python -m legacy_cobol_env.training.build_sft_dataset
 Artifact:
 
 - `outputs/training/oracle_sft.jsonl`
+
+The old Python SFT dataset is retained for backward compatibility with the
+legacy Python path. It is not the primary training artifact for the current
+COBOL-to-Java evaluation.
 
 The current public rollout schema is Java file-edit JSON:
 
@@ -25,22 +57,17 @@ The current public rollout schema is Java file-edit JSON:
 }
 ```
 
-The training generator is retained for compatibility until the Java SFT phase updates it. Do not treat the existing warm-start JSONL as the primary Java evaluation artifact.
-
 ## Current Training Target
 
-The first RL/generalization target is `invoice_occurs_001`.
+The first SFT/RL generalization target is `invoice_occurs_001`.
 
 Why:
 
 - It is now the hardest task: multi-file COBOL, `OCCURS` parsing, and tax-code
   lookup through `TAXRATE.cbl`.
 - The task is still verifiable with hidden and fresh fixed-width records.
-- The prior pre-hardening Azure repair run exposed the right failure shape:
-  visible tests can pass while hidden/fresh generalization still fails.
-
-Rerun the live Azure baseline after local gates pass before claiming a current
-trained-vs-baseline improvement.
+- The committed Azure Java repair-1 artifact improved the public score from
+  `0.35` to `0.5625`, but the task still failed hidden/fresh generalization.
 
 ## Dry-Run Artifacts
 
