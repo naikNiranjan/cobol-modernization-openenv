@@ -1,0 +1,23 @@
+FROM python:3.12-bookworm
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/workspace
+
+WORKDIR /workspace
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    openjdk-17-jdk-headless \
+    maven \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY pyproject.toml ./
+COPY legacy_cobol_env/server/requirements.txt ./legacy_cobol_env/server/requirements.txt
+
+RUN python -m pip install --upgrade pip && \
+    python -m pip install -r legacy_cobol_env/server/requirements.txt "pytest>=8.0.0" "pytest-cov>=4.0.0"
+
+COPY . .
+
+CMD ["pytest", "legacy_cobol_env/tests/test_java_runner.py", "legacy_cobol_env/tests/test_environment.py", "-q"]

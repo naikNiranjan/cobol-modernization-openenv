@@ -28,8 +28,6 @@ MAX_SOURCE_BYTES = 64_000
 MAX_TOTAL_SOURCE_BYTES = 192_000
 
 UNSAFE_SOURCE_PATTERNS = (
-    ("System.exit", "forbidden source pattern: System.exit"),
-    ("Runtime.getRuntime", "forbidden source pattern: Runtime.getRuntime"),
     ("ProcessBuilder", "forbidden source pattern: ProcessBuilder"),
     ("java.nio.file", "forbidden package: java.nio.file"),
     ("java.io.File", "forbidden type: java.io.File"),
@@ -37,6 +35,10 @@ UNSAFE_SOURCE_PATTERNS = (
     ("javax.net.", "forbidden network import"),
 )
 
+UNSAFE_SOURCE_REGEXES = (
+    (re.compile(r"\bSystem\s*\.\s*exit\b"), "forbidden source pattern: System.exit"),
+    (re.compile(r"\bRuntime\s*\.\s*getRuntime\b"), "forbidden source pattern: Runtime.getRuntime"),
+)
 NETWORK_IMPORT_RE = re.compile(r"(?m)^\s*import\s+(?:static\s+)?(?:java|javax)\.net(?:\.|;)")
 SOCKET_IMPORT_RE = re.compile(r"(?m)^\s*import\s+(?:static\s+)?[\w.]*Socket\w*\s*;")
 EXPECTED_ACTUAL_RE = re.compile(r"expected:\s*<(.*?)>\s*but was:\s*<(.*?)>", re.DOTALL)
@@ -101,6 +103,9 @@ def validate_java_edits(file_edits: dict[str, str]) -> tuple[bool, str | None]:
         for needle, message in UNSAFE_SOURCE_PATTERNS:
             if needle in source:
                 return False, message
+        for pattern, message in UNSAFE_SOURCE_REGEXES:
+            if pattern.search(source):
+                return False, message
         if NETWORK_IMPORT_RE.search(source):
             return False, "forbidden network import"
         if SOCKET_IMPORT_RE.search(source):
@@ -144,7 +149,7 @@ def generate_junit_test_source(tests: list[TestCase], class_name: str = "Generat
 def evaluate_java_files(
     file_edits: dict[str, str],
     tests: list[TestCase],
-    timeout_s: float = 20.0,
+    timeout_s: float = 60.0,
     mvn_executable: str | None = None,
 ) -> JavaEvaluationResult:
     safety_ok, safety_error = validate_java_edits(file_edits)
@@ -263,12 +268,14 @@ def _parse_surefire_reports(project_dir: Path, tests: list[TestCase]) -> list[Ja
     method_to_case = {_method_name(case.case_id, index): case for index, case in enumerate(tests, start=1)}
     reports_dir = project_dir / "target/surefire-reports"
     results: dict[str, JavaCaseResult] = {}
+    parsed_report = False
 
     for report in sorted(reports_dir.glob("TEST-*.xml")):
         try:
             root = ET.parse(report).getroot()
         except ET.ParseError:
             continue
+        parsed_report = True
 
         for testcase in root.iter():
             if _local_name(testcase.tag) != "testcase":
@@ -299,7 +306,22 @@ def _parse_surefire_reports(project_dir: Path, tests: list[TestCase]) -> list[Ja
                 failure_type="test_failure" if _local_name(failure.tag) == "failure" else "test_error",
             )
 
-    return [results[case.case_id] for case in tests if case.case_id in results]
+    if not parsed_report:
+        return []
+
+    return [
+        results.get(
+            case.case_id,
+            JavaCaseResult(
+                case_id=case.case_id,
+                passed=False,
+                expected=case.expected_output,
+                error="generated JUnit case did not produce a Surefire result",
+                failure_type="missing_result",
+            ),
+        )
+        for case in tests
+    ]
 
 
 def _first_failure(testcase: ET.Element) -> ET.Element | None:

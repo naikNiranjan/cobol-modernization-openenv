@@ -4,6 +4,8 @@ import pytest
 
 from legacy_cobol_env.server.java_runner import (
     ALLOWED_JAVA_PATHS,
+    _method_name,
+    _parse_surefire_reports,
     evaluate_java_files,
     generate_junit_test_source,
     validate_java_edits,
@@ -118,7 +120,9 @@ def test_path_validation_rejects_absolute_traversal_and_non_editable_paths(path)
     "source",
     [
         "package com.example.migration; class X { void x() { System.exit(1); } }",
+        "package com.example.migration; class X { void x() { System . exit(1); } }",
         "package com.example.migration; class X { void x() { Runtime.getRuntime(); } }",
+        "package com.example.migration; class X { void x() { Runtime . getRuntime(); } }",
         "package com.example.migration; class X { ProcessBuilder builder; }",
         "package com.example.migration; import java.nio.file.Path; class X {}",
         "package com.example.migration; import java.io.File; class X {}",
@@ -141,6 +145,25 @@ def test_junit_generation_includes_input_and_expected_output():
     assert case.expected_output in source
     assert "MigrationService" in source
     assert "assertEquals" in source
+
+
+def test_missing_surefire_case_results_are_synthesized(tmp_path):
+    tests = payroll_task().visible_tests
+    reports_dir = tmp_path / "target/surefire-reports"
+    reports_dir.mkdir(parents=True)
+    first_method = _method_name(tests[0].case_id, 1)
+    (reports_dir / "TEST-GeneratedMigrationTest.xml").write_text(
+        f'<?xml version="1.0" encoding="UTF-8"?><testsuite><testcase name="{first_method}"/></testsuite>',
+        encoding="utf-8",
+    )
+
+    results = _parse_surefire_reports(tmp_path, tests)
+
+    assert len(results) == len(tests)
+    assert results[0].case_id == tests[0].case_id
+    assert results[0].passed is True
+    assert [result.failure_type for result in results[1:]] == ["missing_result", "missing_result"]
+    assert all(result.passed is False for result in results[1:])
 
 
 def test_missing_maven_returns_structured_failure(tmp_path):
